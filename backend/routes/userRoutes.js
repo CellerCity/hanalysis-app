@@ -1,80 +1,133 @@
 const express = require('express');
 const router = express.Router();
+const User = require('../models/userModel');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const User = require('../models/userModel');
+const axios = require('axios'); // We need axios for the IP API call
 
-// @desc    Register a new user
+// --- Helper function to generate a JWT ---
+// This now uses the most current location for the token payload
+const generateToken = (user) => {
+    const locationForToken = user.currentLocation || user.location;
+    return jwt.sign(
+        { 
+            id: user._id,
+            name: user.name,
+            email: user.email,
+            location: locationForToken 
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: '30d' }
+    );
+};
+
 // @route   POST /api/users/register
-// @access  Public
+// @desc    Register a new user
 router.post('/register', async (req, res) => {
+    const { name, email, password, age, location } = req.body;
     try {
-        const { name, email, password, age, location } = req.body;
-        if (!name || !email || !password || !age || !location) {
-            return res.status(400).json({ message: 'Please enter all mandatory fields' });
-        }
-        const userExists = await User.findOne({ email });
-        if (userExists) {
-            return res.status(400).json({ message: 'User with this email already exists' });
-        }
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
-        const user = await User.create({
-            name,
-            email,
-            password: hashedPassword,
-            age,
-            location,
-        });
-
+        let user = await User.findOne({ email });
         if (user) {
-            const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
-            res.status(201).json({
-                _id: user._id,
-                name: user.name,
-                email: user.email,
-                location: user.location,
-                token: token,
-            });
-        } else {
-            res.status(400).json({ message: 'Invalid user data' });
+            return res.status(400).json({ message: 'User already exists' });
         }
+        
+        // user = new User({ name, email, password, age, location, currentLocation: location });
+        user = new User({
+        name,
+        email,
+        password,
+        age,
+        location,
+        currentLocation: location,
+        locationHistory: [location] // Initialize history with signup location
+        });
+        
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(password, salt);
+        await user.save();
+        console.log('New user created:', user.email);
+        res.status(201).json({
+            _id: user.id,
+            name: user.name,
+            email: user.email,
+            location: user.currentLocation,
+            token: generateToken(user),
+        });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Server Error' });
+        console.error('Registration error:', error.message);
+        res.status(500).send('Server error');
     }
 });
 
-// @desc    Authenticate a user (login)
 // @route   POST /api/users/login
-// @access  Public
+// @desc    Authenticate user, update location, & get token
 router.post('/login', async (req, res) => {
-    try {
-        const { email, password } = req.body;
-        if (!email || !password) {
-            return res.status(400).json({ message: 'Please provide email and password' });
-        }
+    const { email, password } = req.body;
 
-        // Find user by email. We need to explicitly ask for the password since we set `select: false` in the model.
+    try {
+        // 1. Check for user and explicitly select the password
         const user = await User.findOne({ email }).select('+password');
 
-        // If user exists and password matches, send back user data and token
-        if (user && (await bcrypt.compare(password, user.password))) {
-            const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
-            res.json({
-                _id: user._id,
-                name: user.name,
-                email: user.email,
-                location: user.location,
-                token: token,
-            });
-        } else {
-            // If user not found or password doesn't match
-            res.status(401).json({ message: 'Invalid email or password' });
+        if (!user || !(await bcrypt.compare(password, user.password))) {
+            return res.status(400).json({ message: 'Invalid credentials' });
         }
+
+        let determinedLocation;
+
+        // --- IP Geolocation Logic ---
+        const ip = req.ip || req.connection.remoteAddress;
+        console.log(`[DEBUG] Attempting geolocation for IP: ${ip}`);
+
+        try {
+            const geoResponse = await axios.get(`http://ip-api.com/json/${ip}`);
+            console.log('[DEBUG] Geolocation API Response:', JSON.stringify(geoResponse.data, null, 2));
+
+            if (geoResponse.data && geoResponse.data.status === 'success' && geoResponse.data.city) {
+                determinedLocation = geoResponse.data.city;
+                console.log(`[DEBUG] Live location detected: ${determinedLocation}`);
+            } else {
+                // This block will be hit for ::1 with status: "fail"
+                throw new Error(`Geolocation API failed with status: ${geoResponse.data.status || 'unknown'}`);
+            }
+        } catch (geoError) {
+            console.log(`[INFO] Geolocation failed: ${geoError.message}. Checking for development fallback.`);
+            // If live detection fails, check for the dev fallback.
+            if (process.env.DEV_DEFAULT_LOCATION) {
+                determinedLocation = process.env.DEV_DEFAULT_LOCATION;
+                console.log(`[DEBUG] Using development fallback location: ${determinedLocation}`);
+            } else {
+                // If no dev fallback, use the last known location from the DB.
+                determinedLocation = user.currentLocation || user.location;
+                console.log(`[DEBUG] Using last known database location: ${determinedLocation}`);
+            }
+        }
+
+        // --- Database Update Logic ---
+        // Now, update the user's record with the determined location, whatever its source was.
+        if (user.currentLocation !== determinedLocation) {
+            console.log(`[DEBUG] New location detected. Old: ${user.currentLocation}, New: ${determinedLocation}. Updating database.`);
+            user.currentLocation = determinedLocation;
+            if (!user.locationHistory.includes(determinedLocation)) {
+                user.locationHistory.push(determinedLocation);
+            }
+            await user.save();
+            console.log(`[SUCCESS] User ${user.email} location updated to ${determinedLocation}`);
+        } else {
+            console.log(`[DEBUG] Location has not changed. Current location is still ${determinedLocation}.`);
+        }
+
+        // --- Respond with token and data ---
+        res.json({
+            _id: user.id,
+            name: user.name,
+            email: user.email,
+            location: determinedLocation, // Send the most up-to-date location
+            token: generateToken(user), // generateToken will now use the newly saved user.currentLocation
+        });
+
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Server Error' });
+        console.error('Login error:', error.message);
+        res.status(500).send('Server error');
     }
 });
 
