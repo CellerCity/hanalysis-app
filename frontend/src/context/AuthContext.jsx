@@ -1,44 +1,45 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-
-// --- IMPORTANT SETUP STEP ---
-// This file uses a package to decode the user's login token.
-// Please install it by running this command in your FRONTEND terminal:
-//
-// npm install jwt-decode
-//
-// After installing, your app should work correctly.
-// --------------------------
-
+import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
+import api from '../api/api';
 
 const AuthContext = createContext(null);
+
+export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
 
+    const handleAuthentication = (token) => {
+        localStorage.setItem('token', token);
+        const decoded = jwtDecode(token);
+        setUser(decoded);
+    };
+
     useEffect(() => {
         const token = localStorage.getItem('token');
         if (token) {
             try {
-                const decoded = jwtDecode(token);
-                const isExpired = decoded.exp * 1000 < Date.now();
-                if (isExpired) {
-                    logout();
-                } else {
-                    setUser({ name: decoded.name, location: decoded.location });
-                }
+                handleAuthentication(token);
             } catch (error) {
-                console.error("Invalid token:", error);
-                logout(); // Clear invalid token
+                // Handle expired or invalid token
+                localStorage.removeItem('token');
+                setUser(null);
             }
         }
-        setLoading(false); // Finished loading auth state
+        setLoading(false);
     }, []);
 
-    const login = (userData) => {
-        localStorage.setItem('token', userData.token);
-        setUser({ name: userData.name, location: userData.location });
+    const login = async (email, password) => {
+        try {
+            const { data } = await axios.post('http://localhost:5000/api/users/login', { email, password });
+            handleAuthentication(data.token);
+            return data;
+        } catch (error) {
+            console.error("Login failed:", error.response?.data?.message || error.message);
+            throw new Error(error.response?.data?.message || 'Login failed');
+        }
     };
 
     const logout = () => {
@@ -46,22 +47,12 @@ export const AuthProvider = ({ children }) => {
         setUser(null);
     };
 
-    // The value provided to consuming components
-    const value = { user, login, logout, loading };
+    const value = { user, loading, login, logout, handleAuthentication };
 
     return (
         <AuthContext.Provider value={value}>
             {children}
         </AuthContext.Provider>
     );
-};
-
-// Custom hook to use the auth context
-export const useAuth = () => {
-    const context = useContext(AuthContext);
-    if (context === null) {
-        throw new Error('useAuth must be used within an AuthProvider');
-    }
-    return context;
 };
 

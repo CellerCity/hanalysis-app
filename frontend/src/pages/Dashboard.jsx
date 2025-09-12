@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useAuth } from '../context/AuthContext.jsx'; // Path updated
+import { useAuth } from '../context/AuthContext'; // Path updated for module resolution
 
 // --- Helper Components for Icons ---
 const SunIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>;
@@ -24,7 +24,7 @@ const calculateRiskScore = (metrics) => {
 };
 
 
-const Dashboard = () => {
+const Dashboard = ({ onNavigate }) => {
     const { user, logout } = useAuth();
     const [metrics, setMetrics] = useState(null);
     const [riskAssessment, setRiskAssessment] = useState(null);
@@ -33,7 +33,8 @@ const Dashboard = () => {
 
     useEffect(() => {
         const fetchHealthMetrics = async () => {
-            const locationQuery = user?.location || 'Kharagpur';
+            const locationQuery = user.location;
+            setLoading(true);
             try {
                 const response = await axios.get(`http://localhost:5000/api/health-metrics?location=${locationQuery}`);
                 setMetrics(response.data);
@@ -48,14 +49,14 @@ const Dashboard = () => {
             }
         };
 
-        if (user) { // Only fetch data if the user object is available
+        if (user) {
           fetchHealthMetrics();
         }
     }, [user]);
 
     if (loading) return <div style={styles.centerMessage}>Loading Dashboard...</div>;
     if (error) return <div style={{...styles.centerMessage, color: '#ff4d4d'}}>{error}</div>;
-    if (!metrics || !riskAssessment) return <div style={styles.centerMessage}>No data available.</div>;
+    if (!metrics || !riskAssessment) return <div style={styles.centerMessage}>No data available for your location.</div>;
 
     const { location, weather, air_quality } = metrics;
     const { score, level, recommendations } = riskAssessment;
@@ -81,12 +82,19 @@ const Dashboard = () => {
                         <small>{new Date().toLocaleString()}</small>
                     </div>
                 </div>
-                <button onClick={logout} style={styles.authButton}>
-                    Logout
-                </button>
+                {/* --- NAVIGATION BUTTONS --- */}
+                <div style={styles.headerActions}>
+                    <button onClick={() => onNavigate('profile')} style={styles.navButton}>
+                        My Profile
+                    </button>
+                    <button onClick={logout} style={styles.authButton}>
+                        Logout
+                    </button>
+                </div>
             </header>
 
             <main style={styles.main}>
+                {/* --- Cards remain the same --- */}
                 <div style={{ ...styles.card, ...styles.riskCard, borderColor: getRiskColor(level) }}>
                     <h2 style={styles.cardTitle}>Overall Health Risk</h2>
                     <div style={styles.riskDisplay}>
@@ -139,6 +147,9 @@ const styles = {
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' },
     title: { fontSize: '2rem', fontWeight: '600', color: '#1a202c', margin: 0 },
     location: { textAlign: 'left', color: '#718096' },
+    headerActions: { display: 'flex', gap: '1rem' },
+    navButton: { padding: '0.75rem 1.5rem', fontSize: '1rem', fontWeight: '600', color: '#2d3748', backgroundColor: '#fff', border: '1px solid #cbd5e0', borderRadius: '6px', cursor: 'pointer' },
+    authButton: { padding: '0.75rem 1.5rem', fontSize: '1rem', fontWeight: '600', color: '#fff', backgroundColor: '#2d3748', border: 'none', borderRadius: '6px', cursor: 'pointer' },
     main: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2rem' },
     card: { backgroundColor: '#fff', borderRadius: '8px', padding: '1.5rem', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)', display: 'flex', flexDirection: 'column' },
     cardTitle: { fontSize: '1.25rem', fontWeight: '600', marginBottom: '1rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' },
@@ -157,8 +168,7 @@ const styles = {
     riskLevel: { fontSize: '1.5rem', fontWeight: '600' },
     recommendations: {},
     recommendationsTitle: { fontSize: '1rem', fontWeight: '600', color: '#4a5568', marginBottom: '0.5rem' },
-    recommendationsList: { margin: 0, paddingLeft: '1.2rem', fontSize: '0.9rem', color: '#4a5568' },
-    authButton: { padding: '0.75rem 1.5rem', fontSize: '1rem', fontWeight: '600', color: '#fff', backgroundColor: '#2d3748', border: 'none', borderRadius: '6px', cursor: 'pointer' }
+    recommendationsList: { margin: 0, paddingLeft: '1.2rem', fontSize: '0.9rem', color: '#4a5568' }
 };
 
 export default Dashboard;

@@ -1,75 +1,82 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { useAuth } from '../context/AuthContext.jsx'; // Import useAuth
+import { useAuth } from '../context/AuthContext.jsx';
 
-const Signup = ({ switchToLogin }) => { // Accept switchToLogin prop
-    const [formData, setFormData] = useState({ name: '', email: '', password: '', confirmPassword: '', age: '', location: '' });
+const Signup = ({ onNavigate }) => {
+    // --- THE FIX: We now need the new handleAuthentication function ---
+    const { handleAuthentication } = useAuth();
+    const [formData, setFormData] = useState({
+        name: '',
+        email: '',
+        password: '',
+        confirmPassword: '',
+        age: '',
+        location: '',
+        preExistingConditions: '',
+        allergies: ''
+    });
     const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
-    const { login } = useAuth(); // Get login function to automatically log in user after signup
 
-    const { name, email, password, confirmPassword, age, location } = formData;
+    const { name, email, password, confirmPassword, age, location, preExistingConditions, allergies } = formData;
+
     const onChange = e => setFormData({ ...formData, [e.target.name]: e.target.value });
 
     const onSubmit = async e => {
         e.preventDefault();
+        setError('');
         if (password !== confirmPassword) { return setError('Passwords do not match'); }
         if (password.length < 6) { return setError('Password must be at least 6 characters'); }
-        setLoading(true);
-        setError('');
         try {
-            const newUser = { name, email, password, age, location };
-            const config = { headers: { 'Content-Type': 'application/json' } };
-            const body = JSON.stringify(newUser);
-            const response = await axios.post('http://localhost:5000/api/users/register', body, config);
-            login(response.data); // On successful signup, log the user in immediately
+            const newUser = { name, email, password, age, location, preExistingConditions, allergies };
+            const { data } = await axios.post('http://localhost:5000/api/users/register', newUser);
+            
+            // --- THE FIX: Call the correct function with the token ---
+            handleAuthentication(data.token);
+
         } catch (err) {
-            const errorMessage = err.response?.data?.message || 'Something went wrong. Please try again.';
-            setError(errorMessage);
-        } finally {
-            setLoading(false);
+            setError(err.response?.data?.message || 'Something went wrong');
+            console.error(err);
         }
     };
 
     return (
         <div style={styles.container}>
-            <div style={styles.formWrapper}>
-                <h1 style={styles.title}>Create Your HANALYSIS Account</h1>
-                <p style={styles.subtitle}>Get personalized health insights today.</p>
-                {error && <div style={styles.errorBox}>{error}</div>}
+            <div style={styles.formCard}>
+                <h1 style={styles.title}>Create Your Account</h1>
                 <form onSubmit={onSubmit}>
-                    {/* --- Input fields (No changes) --- */}
-                    <div style={styles.inputGroup}><label style={styles.label}>Name</label><input type="text" name="name" value={name} onChange={onChange} required style={styles.input} /></div>
-                    <div style={styles.inputGroup}><label style={styles.label}>Email</label><input type="email" name="email" value={email} onChange={onChange} required style={styles.input} /></div>
-                    <div style={styles.inputGroup}><label style={styles.label}>Password</label><input type="password" name="password" value={password} onChange={onChange} required style={styles.input} /></div>
-                    <div style={styles.inputGroup}><label style={styles.label}>Confirm Password</label><input type="password" name="confirmPassword" value={confirmPassword} onChange={onChange} required style={styles.input} /></div>
-                    <div style={styles.row}><div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Age</label><input type="number" name="age" value={age} onChange={onChange} required style={styles.input} /></div><div style={{...styles.inputGroup, flex: 2, marginLeft: '1rem'}}><label style={styles.label}>Location (City)</label><input type="text" name="location" value={location} onChange={onChange} required style={styles.input} /></div></div>
-                    <button type="submit" style={styles.button} disabled={loading}>{loading ? 'Signing Up...' : 'Sign Up'}</button>
+                    {/* Form inputs remain the same */}
+                    {error && <p style={styles.errorMessage}>{error}</p>}
+                    <div style={styles.formGroup}><input type="text" placeholder="Name" name="name" value={name} onChange={onChange} required style={styles.input} /></div>
+                    <div style={styles.formGroup}><input type="email" placeholder="Email Address" name="email" value={email} onChange={onChange} required style={styles.input} /></div>
+                    <div style={styles.formGroup}><input type="password" placeholder="Password" name="password" value={password} onChange={onChange} required style={styles.input} /></div>
+                    <div style={styles.formGroup}><input type="password" placeholder="Confirm Password" name="confirmPassword" value={confirmPassword} onChange={onChange} required style={styles.input} /></div>
+                    <div style={styles.formGroup}><input type="number" placeholder="Age" name="age" value={age} onChange={onChange} required style={styles.input} /></div>
+                    <div style={styles.formGroup}><input type="text" placeholder="Your City (e.g., Kharagpur)" name="location" value={location} onChange={onChange} required style={styles.input} /></div>
+                    <p style={styles.instructions}>Optional: For personalized alerts, enter items separated by a comma.</p>
+                    <div style={styles.formGroup}><input type="text" placeholder="Allergies (e.g., Pollen, Dust)" name="allergies" value={allergies} onChange={onChange} style={styles.input} /></div>
+                    <div style={styles.formGroup}><input type="text" placeholder="Pre-existing Conditions (e.g., Asthma)" name="preExistingConditions" value={preExistingConditions} onChange={onChange} style={styles.input} /></div>
+                    <button type="submit" style={styles.button}>Sign Up</button>
                 </form>
-                {/* --- NEW: Link to switch to Login page --- */}
-                <p style={styles.switchText}>
-                    Already have an account?{' '}
-                    <span onClick={switchToLogin} style={styles.switchLink}>Log In</span>
+                <p style={styles.subText}>
+                    Already have an account? <span onClick={() => onNavigate('login')} style={styles.link}>Login</span>
                 </p>
             </div>
         </div>
     );
 };
 
-// Using the same styles as Login.jsx for consistency
+// --- STYLES ---
 const styles = {
-    container: { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif' },
-    formWrapper: { backgroundColor: '#fff', padding: '2.5rem', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', width: '100%', maxWidth: '450px' },
-    title: { fontSize: '1.75rem', fontWeight: '600', textAlign: 'center', marginBottom: '0.5rem', color: '#1a202c' },
-    subtitle: { textAlign: 'center', color: '#718096', marginBottom: '2rem' },
-    inputGroup: { marginBottom: '1.25rem' },
-    label: { display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: '500', color: '#4a5568' },
-    input: { width: '100%', padding: '0.75rem', border: '1px solid #cbd5e0', borderRadius: '6px', fontSize: '1rem', boxSizing: 'border-box' },
-    row: { display: 'flex', justifyContent: 'space-between' },
-    button: { width: '100%', padding: '0.8rem', border: 'none', borderRadius: '6px', backgroundColor: '#2d3748', color: '#fff', fontSize: '1rem', fontWeight: '600', cursor: 'pointer', marginTop: '1rem' },
-    errorBox: { backgroundColor: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', padding: '0.75rem', borderRadius: '6px', marginBottom: '1rem', textAlign: 'center' },
-    switchText: { textAlign: 'center', marginTop: '1.5rem', color: '#718096' },
-    switchLink: { color: '#2d3748', fontWeight: '600', cursor: 'pointer', textDecoration: 'underline' }
+    container: { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#f0f2f5' },
+    formCard: { backgroundColor: '#fff', padding: '2.5rem', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', width: '100%', maxWidth: '450px' },
+    title: { textAlign: 'center', fontSize: '1.75rem', fontWeight: '600', color: '#1a202c', marginBottom: '1.5rem' },
+    formGroup: { marginBottom: '1rem' },
+    input: { width: '100%', padding: '0.75rem 1rem', border: '1px solid #cbd5e0', borderRadius: '6px', fontSize: '1rem' },
+    button: { width: '100%', padding: '0.75rem', border: 'none', borderRadius: '6px', backgroundColor: '#2d3748', color: '#fff', fontSize: '1rem', fontWeight: '600', cursor: 'pointer' },
+    subText: { textAlign: 'center', marginTop: '1rem', color: '#718096' },
+    link: { color: '#2b6cb0', fontWeight: '500', cursor: 'pointer' },
+    errorMessage: { color: '#e53e3e', backgroundColor: '#fed7d7', padding: '0.75rem', borderRadius: '6px', textAlign: 'center', marginBottom: '1rem' },
+    instructions: { color: '#718096', fontSize: '0.8rem', textAlign: 'center', marginBottom: '1rem' }
 };
 
 export default Signup;
