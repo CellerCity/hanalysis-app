@@ -2,33 +2,37 @@
 const express = require('express');
 const dotenv = require('dotenv');
 const axios = require('axios');
-const cors = require('cors'); // Import the cors package
+const cors = require('cors');
+const connectDB = require('./config/db');
+
+// Import route files
+const userRoutes = require('./routes/userRoutes'); // Import our new user routes
 
 // Load environment variables from .env file
 dotenv.config();
+
+// --- Connect to Database ---
+connectDB();
 
 // Initialize the Express application
 const app = express();
 
 // --- Middleware Setup ---
-
-// Use CORS to allow cross-origin requests from your frontend
 app.use(cors()); 
-
-// Middleware to parse JSON bodies
 app.use(express.json());
 
 // Define the port for the server to listen on
 const PORT = process.env.PORT || 5000;
 
-// === API ROUTES ===
+// --- Mount Routers ---
+// Tell the app to use our userRoutes file for any URL that starts with /api/users
+app.use('/api/users', userRoutes);
 
-// A simple root route to test if the server is running
+// === EXISTING API ROUTES ===
 app.get('/', (req, res) => {
     res.status(200).json({ message: 'Welcome to the HANALYSIS API!' });
 });
 
-// API endpoint for health and weather metrics
 app.get('/api/health-metrics', async (req, res) => {
     try {
         const location = req.query.location || 'Kharagpur';
@@ -40,7 +44,6 @@ app.get('/api/health-metrics', async (req, res) => {
 
         const weatherApiUrl = `https://api.weatherapi.com/v1/current.json?key=${apiKey}&q=${location}&aqi=yes`;
         
-        console.log('Attempting to fetch weather data from:', weatherApiUrl);
         const response = await axios.get(weatherApiUrl);
         const data = response.data;
 
@@ -78,7 +81,6 @@ app.get('/api/health-metrics', async (req, res) => {
     }
 });
 
-// API endpoint for health news alerts with 3-tier graceful fallback
 app.get('/api/health-alerts', async (req, res) => {
     try {
         const localQuery = req.query.location || 'Kharagpur';
@@ -107,13 +109,11 @@ app.get('/api/health-alerts', async (req, res) => {
         let searchLocation = localQuery;
 
         if (articles.length === 0) {
-            console.log(`No results for ${localQuery}, falling back to ${regionalQuery}.`);
             articles = await fetchNews(regionalQuery);
             searchLocation = regionalQuery;
         }
         
         if (articles.length === 0) {
-            console.log(`No results for ${regionalQuery}, falling back to ${nationalQuery}.`);
             articles = await fetchNews(nationalQuery);
             searchLocation = nationalQuery;
         }
@@ -147,7 +147,9 @@ app.get('/api/health-alerts', async (req, res) => {
     }
 });
 
+
 // Start the server and listen for incoming requests
 app.listen(PORT, () => {
     console.log(`Server is running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
 });
+
