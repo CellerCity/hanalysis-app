@@ -1,0 +1,10 @@
+.env
+
+# Virtual Environment
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+```
+Save the file.
