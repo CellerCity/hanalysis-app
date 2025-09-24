@@ -3,22 +3,14 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const Signup = ({ onNavigate }) => {
-    // --- THE FIX: We now need the new handleAuthentication function ---
     const { handleAuthentication } = useAuth();
     const [formData, setFormData] = useState({
-        name: '',
-        email: '',
-        password: '',
-        confirmPassword: '',
-        age: '',
-        location: '',
-        preExistingConditions: '',
-        allergies: ''
+        name: '', email: '', password: '', confirmPassword: '', age: '',
+        location: '', preExistingConditions: '', allergies: ''
     });
     const [error, setError] = useState('');
 
     const { name, email, password, confirmPassword, age, location, preExistingConditions, allergies } = formData;
-
     const onChange = e => setFormData({ ...formData, [e.target.name]: e.target.value });
 
     const onSubmit = async e => {
@@ -29,13 +21,10 @@ const Signup = ({ onNavigate }) => {
         try {
             const newUser = { name, email, password, age, location, preExistingConditions, allergies };
             const { data } = await axios.post('http://localhost:5000/api/users/register', newUser);
-            
-            // --- THE FIX: Call the correct function with the token ---
             handleAuthentication(data.token);
-
+            // After signup, the useEffect in App.jsx will handle navigation automatically.
         } catch (err) {
             setError(err.response?.data?.message || 'Something went wrong');
-            console.error(err);
         }
     };
 
@@ -44,7 +33,6 @@ const Signup = ({ onNavigate }) => {
             <div style={styles.formCard}>
                 <h1 style={styles.title}>Create Your Account</h1>
                 <form onSubmit={onSubmit}>
-                    {/* Form inputs remain the same */}
                     {error && <p style={styles.errorMessage}>{error}</p>}
                     <div style={styles.formGroup}><input type="text" placeholder="Name" name="name" value={name} onChange={onChange} required style={styles.input} /></div>
                     <div style={styles.formGroup}><input type="email" placeholder="Email Address" name="email" value={email} onChange={onChange} required style={styles.input} /></div>
@@ -80,4 +68,3 @@ const styles = {
 };
 
 export default Signup;
-

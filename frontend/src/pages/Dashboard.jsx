@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, {useState, useEffect } from 'react';
 import axios from 'axios';
-import { useAuth } from '../context/AuthContext'; // Path updated for module resolution
+import { useAuth } from '../context/AuthContext.jsx';
 
-// --- Helper Components for Icons ---
+// Helper Components (no changes)
 const SunIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>;
 const WindIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"></path></svg>;
 const DropletIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path></svg>;
 
-// --- Risk Calculation Logic ---
+// Risk Calculation Logic (no changes)
 const calculateRiskScore = (metrics) => {
     let score = 0;
     const recommendations = [];
@@ -23,7 +23,6 @@ const calculateRiskScore = (metrics) => {
     return { score, level, recommendations };
 };
 
-
 const Dashboard = ({ onNavigate }) => {
     const { user, logout } = useAuth();
     const [metrics, setMetrics] = useState(null);
@@ -33,7 +32,8 @@ const Dashboard = ({ onNavigate }) => {
 
     useEffect(() => {
         const fetchHealthMetrics = async () => {
-            const locationQuery = user.location;
+            // This logic correctly handles guests (defaulting to Kharagpur) and logged-in users.
+            const locationQuery = user?.location || 'Kharagpur';
             setLoading(true);
             try {
                 const response = await axios.get(`http://localhost:5000/api/health-metrics?location=${locationQuery}`);
@@ -49,10 +49,8 @@ const Dashboard = ({ onNavigate }) => {
             }
         };
 
-        if (user) {
-          fetchHealthMetrics();
-        }
-    }, [user]);
+        fetchHealthMetrics();
+    }, [user]); // Re-fetches data when the user logs in or out
 
     if (loading) return <div style={styles.centerMessage}>Loading Dashboard...</div>;
     if (error) return <div style={{...styles.centerMessage, color: '#ff4d4d'}}>{error}</div>;
@@ -60,7 +58,6 @@ const Dashboard = ({ onNavigate }) => {
 
     const { location, weather, air_quality } = metrics;
     const { score, level, recommendations } = riskAssessment;
-
     const getAqiColor = (aqi) => (aqi <= 2 ? '#4caf50' : aqi <= 4 ? '#ff9800' : '#f44336');
     const getRiskColor = (riskLevel) => {
         switch (riskLevel) {
@@ -82,19 +79,24 @@ const Dashboard = ({ onNavigate }) => {
                         <small>{new Date().toLocaleString()}</small>
                     </div>
                 </div>
-                {/* --- NAVIGATION BUTTONS --- */}
+                {/* --- This header correctly shows different buttons for guests vs. users --- */}
                 <div style={styles.headerActions}>
-                    <button onClick={() => onNavigate('profile')} style={styles.navButton}>
-                        My Profile
-                    </button>
-                    <button onClick={logout} style={styles.authButton}>
-                        Logout
-                    </button>
+                    {user ? (
+                        <>
+                            <button onClick={() => onNavigate('profile')} style={styles.navButton}>My Profile</button>
+                            <button onClick={logout} style={styles.authButton}>Logout</button>
+                        </>
+                    ) : (
+                        <>
+                            <button onClick={() => onNavigate('login')} style={styles.navButton}>Login</button>
+                            <button onClick={() => onNavigate('signup')} style={styles.authButton}>Sign Up</button>
+                        </>
+                    )}
                 </div>
             </header>
 
             <main style={styles.main}>
-                {/* --- Cards remain the same --- */}
+                {/* Dashboard cards remain the same */}
                 <div style={{ ...styles.card, ...styles.riskCard, borderColor: getRiskColor(level) }}>
                     <h2 style={styles.cardTitle}>Overall Health Risk</h2>
                     <div style={styles.riskDisplay}>
@@ -141,7 +143,7 @@ const Dashboard = ({ onNavigate }) => {
     );
 };
 
-// --- STYLES ---
+// Styles (no changes)
 const styles = {
     dashboard: { fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif', backgroundColor: '#f0f2f5', minHeight: '100vh', padding: '2rem', color: '#333' },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' },

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Login from './pages/Login.jsx';
@@ -7,34 +7,41 @@ import Profile from './pages/Profile.jsx';
 
 const AppRouter = () => {
     const { user, loading } = useAuth();
-    // Default to the login page if not authenticated
-    const [currentPage, setCurrentPage] = useState(user ? 'dashboard' : 'login');
+    // --- THE FIX: The default page for EVERYONE is the dashboard ---
+    const [currentPage, setCurrentPage] = useState('dashboard');
 
     const handleNavigation = (page) => {
         setCurrentPage(page);
     };
 
-    if (loading) {
-        return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', fontFamily: 'sans-serif' }}>Authenticating...</div>;
-    }
-
-    if (user) {
-        switch (currentPage) {
-            case 'profile':
-                return <Profile onNavigate={handleNavigation} />;
-            case 'dashboard':
-            default:
-                return <Dashboard onNavigate={handleNavigation} />;
+    // This effect handles navigation changes when the user's login state changes
+    useEffect(() => {
+        if (!loading) {
+            if (user && (currentPage === 'login' || currentPage === 'signup')) {
+                // If a user just logged in, send them to the dashboard
+                setCurrentPage('dashboard');
+            } else if (!user && currentPage === 'profile') {
+                // If a logged-out user tries to access a protected page, send them to login
+                setCurrentPage('login');
+            }
         }
+    }, [user, loading, currentPage]);
+
+    if (loading) {
+        return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', fontFamily: 'sans-serif' }}>Loading HANALYSIS...</div>;
     }
 
-    // If no user is logged in, handle navigation between login and signup
+    // --- Simplified Routing ---
     switch (currentPage) {
+        case 'login':
+            return <Login onNavigate={handleNavigation} />;
         case 'signup':
             return <Signup onNavigate={handleNavigation} />;
-        case 'login':
+        case 'profile':
+            return user ? <Profile onNavigate={handleNavigation} /> : <Login onNavigate={handleNavigation} />;
+        case 'dashboard':
         default:
-            return <Login onNavigate={handleNavigation} />;
+            return <Dashboard onNavigate={handleNavigation} />;
     }
 };
 

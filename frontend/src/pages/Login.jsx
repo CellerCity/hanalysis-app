@@ -14,7 +14,7 @@ const Login = ({ onNavigate }) => {
         setError('');
         try {
             await login(email, password);
-            // Navigation will be handled by App.jsx's re-render
+            // After login, the useEffect in App.jsx will handle navigation automatically.
         } catch (err) {
             setError(err.message || 'Failed to login');
         }
@@ -36,7 +36,6 @@ const Login = ({ onNavigate }) => {
                 </form>
                 <p style={styles.subText}>
                     Don't have an account?{' '}
-                    {/* --- THIS IS THE FIX --- */}
                     <span onClick={() => onNavigate('signup')} style={styles.link}>
                         Sign Up
                     </span>
@@ -60,4 +59,3 @@ const styles = {
 };
 
 export default Login;
-

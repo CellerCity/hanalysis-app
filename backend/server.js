@@ -67,6 +67,7 @@ app.get('/api/health-metrics', async (req, res) => {
             },
             last_updated: data.current.last_updated,
         };
+        // console.log(healthMetrics);
         res.json(healthMetrics);
     } catch (error) {
         console.error("Error fetching health metrics:", error.message);
