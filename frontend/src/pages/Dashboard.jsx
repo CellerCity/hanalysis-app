@@ -1,26 +1,26 @@
-import React, {useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext.jsx';
+import api from '../api/api.js'; // Import our authenticated API client
 
 // Helper Components (no changes)
 const SunIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>;
 const WindIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"></path></svg>;
 const DropletIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path></svg>;
 
-// Risk Calculation Logic (no changes)
-const calculateRiskScore = (metrics) => {
+// This function will now ONLY be used for guests
+const calculateGuestRiskScore = (metrics) => {
     let score = 0;
     const recommendations = [];
     const { weather, air_quality } = metrics;
     if (weather.temperature_celsius > 35) { score += 3; recommendations.push("High temperature: Stay hydrated and avoid prolonged sun exposure."); }
     if (weather.humidity_percent > 85) { score += 2; recommendations.push("High humidity: Air may feel heavy. Good for hydration but can affect breathing for some."); }
     if (weather.uv_index > 6) { score += 3; recommendations.push("High UV Index: Use sunscreen and wear protective clothing."); }
-    if (air_quality.us_epa_index >= 3) { score += 4; recommendations.push("Poor Air Quality: Limit strenuous outdoor activities, especially if you have respiratory issues."); }
-    else if (air_quality.us_epa_index === 2) { score += 1; recommendations.push("Moderate Air Quality: Sensitive individuals should consider reducing outdoor exertion."); }
+    if (air_quality.us_epa_index >= 3) { score += 4; recommendations.push("Poor Air Quality: Limit strenuous outdoor activities."); }
     let level;
-    if (score <= 2) level = 'Low'; else if (score <= 5) level = 'Moderate'; else if (score <= 8) level = 'High'; else level = 'Very High';
-    if (recommendations.length === 0) recommendations.push("Environmental conditions are currently favorable. Enjoy your day!");
-    return { score, level, recommendations };
+    if (score <= 2) level = 'Low'; else if (score <= 5) level = 'Moderate'; else level = 'High';
+    if (recommendations.length === 0) recommendations.push("Environmental conditions seem favorable. Sign up for personalized advice!");
+    return { riskScore: score, riskLevel: level, recommendations, summary: "A general risk assessment based on local weather." };
 };
 
 const Dashboard = ({ onNavigate }) => {
@@ -31,36 +31,44 @@ const Dashboard = ({ onNavigate }) => {
     const [error, setError] = useState('');
 
     useEffect(() => {
-        const fetchHealthMetrics = async () => {
-            // This logic correctly handles guests (defaulting to Kharagpur) and logged-in users.
-            const locationQuery = user?.location || 'Kharagpur';
+        const fetchData = async () => {
             setLoading(true);
+            setError('');
             try {
-                const response = await axios.get(`http://localhost:5000/api/health-metrics?location=${locationQuery}`);
-                setMetrics(response.data);
-                const assessment = calculateRiskScore(response.data);
-                setRiskAssessment(assessment);
-                setError('');
+                if (user) {
+                    // --- NEW LOGIC FOR LOGGED-IN USERS ---
+                    const analysisRes = await api.get('/analysis/full');
+                    setRiskAssessment(analysisRes.data);
+
+                    const metricsRes = await axios.get(`http://localhost:5000/api/health-metrics?location=${user.location}`);
+                    setMetrics(metricsRes.data);
+                } else {
+                    // --- EXISTING LOGIC FOR GUESTS ---
+                    const metricsRes = await axios.get(`http://localhost:5000/api/health-metrics`);
+                    setMetrics(metricsRes.data);
+                    setRiskAssessment(calculateGuestRiskScore(metricsRes.data));
+                }
             } catch (err) {
-                console.error("Error fetching health metrics:", err);
-                setError('Failed to load data. Is the backend server running?');
+                console.error("Dashboard fetch error:", err);
+                setError('Failed to load dashboard data. Please try again later.');
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchHealthMetrics();
-    }, [user]); // Re-fetches data when the user logs in or out
+        fetchData();
+    }, [user]);
 
-    if (loading) return <div style={styles.centerMessage}>Loading Dashboard...</div>;
+    if (loading) return <div style={styles.centerMessage}>Analyzing your health data...</div>;
     if (error) return <div style={{...styles.centerMessage, color: '#ff4d4d'}}>{error}</div>;
-    if (!metrics || !riskAssessment) return <div style={styles.centerMessage}>No data available for your location.</div>;
+    if (!metrics || !riskAssessment) return <div style={styles.centerMessage}>Could not load data.</div>;
 
     const { location, weather, air_quality } = metrics;
-    const { score, level, recommendations } = riskAssessment;
+    const { riskScore, riskLevel, summary, recommendations } = riskAssessment;
+
     const getAqiColor = (aqi) => (aqi <= 2 ? '#4caf50' : aqi <= 4 ? '#ff9800' : '#f44336');
-    const getRiskColor = (riskLevel) => {
-        switch (riskLevel) {
+    const getRiskColor = (level) => {
+        switch (level) {
             case 'Low': return '#4caf50';
             case 'Moderate': return '#ffc107';
             case 'High': return '#ff9800';
@@ -74,12 +82,8 @@ const Dashboard = ({ onNavigate }) => {
             <header style={styles.header}>
                 <div>
                     <h1 style={styles.title}>Welcome, {user?.name || 'Guest'}!</h1>
-                    <div style={styles.location}>
-                        <p>{location.name}, {location.region}</p>
-                        <small>{new Date().toLocaleString()}</small>
-                    </div>
+                    <div style={styles.location}><p>{location.name}, {location.region}</p></div>
                 </div>
-                {/* --- This header correctly shows different buttons for guests vs. users --- */}
                 <div style={styles.headerActions}>
                     {user ? (
                         <>
@@ -96,15 +100,15 @@ const Dashboard = ({ onNavigate }) => {
             </header>
 
             <main style={styles.main}>
-                {/* Dashboard cards remain the same */}
-                <div style={{ ...styles.card, ...styles.riskCard, borderColor: getRiskColor(level) }}>
+                <div style={{ ...styles.card, ...styles.riskCard, borderColor: getRiskColor(riskLevel) }}>
                     <h2 style={styles.cardTitle}>Overall Health Risk</h2>
                     <div style={styles.riskDisplay}>
-                        <div style={{...styles.riskScoreCircle, backgroundColor: getRiskColor(level)}}>
-                            <span style={styles.riskScoreText}>{score}</span>
+                        <div style={{...styles.riskScoreCircle, backgroundColor: getRiskColor(riskLevel)}}>
+                            <span style={styles.riskScoreText}>{riskScore}</span>
                         </div>
-                        <span style={{...styles.riskLevel, color: getRiskColor(level)}}>{level}</span>
+                        <span style={{...styles.riskLevel, color: getRiskColor(riskLevel)}}>{riskLevel}</span>
                     </div>
+                     <p style={styles.summaryText}>{summary}</p>
                     <div style={styles.recommendations}>
                         <h3 style={styles.recommendationsTitle}>Recommendations:</h3>
                         <ul style={styles.recommendationsList}>
@@ -112,7 +116,8 @@ const Dashboard = ({ onNavigate }) => {
                         </ul>
                     </div>
                 </div>
-                <div style={styles.card}>
+                {/* --- ALL METRICS ARE PRESENT --- */}
+                 <div style={styles.card}>
                     <h2 style={styles.cardTitle}>Current Weather</h2>
                     <div style={styles.weatherMain}>
                         <span style={styles.weatherTemp}>{weather.temperature_celsius}°C</span>
@@ -136,6 +141,8 @@ const Dashboard = ({ onNavigate }) => {
                         <div style={styles.metricItem}>PM10: {air_quality.pm10.toFixed(2)} µg/m³</div>
                         <div style={styles.metricItem}>O₃: {air_quality.o3.toFixed(2)} µg/m³</div>
                         <div style={styles.metricItem}>NO₂: {air_quality.no2.toFixed(2)} µg/m³</div>
+                        <div style={styles.metricItem}>SO₂: {air_quality.so2.toFixed(2)} µg/m³</div>
+                        <div style={styles.metricItem}>CO: {air_quality.co.toFixed(2)} µg/m³</div>
                     </div>
                 </div>
             </main>
@@ -143,7 +150,7 @@ const Dashboard = ({ onNavigate }) => {
     );
 };
 
-// Styles (no changes)
+// --- STYLES ---
 const styles = {
     dashboard: { fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif', backgroundColor: '#f0f2f5', minHeight: '100vh', padding: '2rem', color: '#333' },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' },
@@ -168,6 +175,7 @@ const styles = {
     riskScoreCircle: { width: '100px', height: '100px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' },
     riskScoreText: { fontSize: '3rem', fontWeight: 'bold' },
     riskLevel: { fontSize: '1.5rem', fontWeight: '600' },
+    summaryText: { fontStyle: 'italic', color: '#4a5568', textAlign: 'center', marginBottom: '1rem', borderTop: '1px solid #e2e8f0', paddingTop: '1rem' },
     recommendations: {},
     recommendationsTitle: { fontSize: '1rem', fontWeight: '600', color: '#4a5568', marginBottom: '0.5rem' },
     recommendationsList: { margin: 0, paddingLeft: '1.2rem', fontSize: '0.9rem', color: '#4a5568' }

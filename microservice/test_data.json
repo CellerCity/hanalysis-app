@@ -1,0 +1,20 @@
+{
+  "userProfile": {
+    "age": 45,
+    "location": "Bangalore",
+    "healthProfile": {
+      "preExistingConditions": ["Asthma"],
+      "allergies": ["Pollen"]
+    }
+  },
+  "weather": {
+    "location": { "name": "Delhi" },
+    "weather": { "temperature_celsius": 38, "humidity_percent": 75 },
+    "air_quality": { "us_epa_index": 4, "pm2_5": 155.4 }
+  },
+  "trends": [
+    { "date": "2025-09-23T00:00:00.000Z", "dengue": 50, "flu symptoms": 20 },
+    { "date": "2025-09-24T00:00:00.000Z", "dengue": 85, "flu symptoms": 22 }
+  ]
+}
+
