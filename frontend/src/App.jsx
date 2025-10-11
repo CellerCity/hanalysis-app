@@ -4,24 +4,21 @@ import Dashboard from './pages/Dashboard.jsx';
 import Login from './pages/Login.jsx';
 import Signup from './pages/Signup.jsx';
 import Profile from './pages/Profile.jsx';
+import Chat from './pages/Chat.jsx'; // Import the new Chat page
 
 const AppRouter = () => {
     const { user, loading } = useAuth();
-    // --- THE FIX: The default page for EVERYONE is the dashboard ---
     const [currentPage, setCurrentPage] = useState('dashboard');
 
     const handleNavigation = (page) => {
         setCurrentPage(page);
     };
 
-    // This effect handles navigation changes when the user's login state changes
     useEffect(() => {
         if (!loading) {
             if (user && (currentPage === 'login' || currentPage === 'signup')) {
-                // If a user just logged in, send them to the dashboard
                 setCurrentPage('dashboard');
-            } else if (!user && currentPage === 'profile') {
-                // If a logged-out user tries to access a protected page, send them to login
+            } else if (!user && (currentPage === 'profile' || currentPage === 'chat')) {
                 setCurrentPage('login');
             }
         }
@@ -31,7 +28,7 @@ const AppRouter = () => {
         return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', fontFamily: 'sans-serif' }}>Loading HANALYSIS...</div>;
     }
 
-    // --- Simplified Routing ---
+    // Main routing logic
     switch (currentPage) {
         case 'login':
             return <Login onNavigate={handleNavigation} />;
@@ -39,6 +36,8 @@ const AppRouter = () => {
             return <Signup onNavigate={handleNavigation} />;
         case 'profile':
             return user ? <Profile onNavigate={handleNavigation} /> : <Login onNavigate={handleNavigation} />;
+        case 'chat':
+            return user ? <Chat onNavigate={handleNavigation} /> : <Login onNavigate={handleNavigation} />;
         case 'dashboard':
         default:
             return <Dashboard onNavigate={handleNavigation} />;

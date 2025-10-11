@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext.jsx';
-import api from '../api/api.js'; // Import our authenticated API client
+import api from '../api/api.js';
 
-// Helper Components (no changes)
+// Helper components remain the same
 const SunIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>;
 const WindIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"></path></svg>;
 const DropletIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path></svg>;
 
-// This function will now ONLY be used for guests
 const calculateGuestRiskScore = (metrics) => {
+    // ... function remains the same
     let score = 0;
     const recommendations = [];
     const { weather, air_quality } = metrics;
@@ -31,19 +31,17 @@ const Dashboard = ({ onNavigate }) => {
     const [error, setError] = useState('');
 
     useEffect(() => {
+        // ... useEffect logic remains the same
         const fetchData = async () => {
             setLoading(true);
             setError('');
             try {
                 if (user) {
-                    // --- NEW LOGIC FOR LOGGED-IN USERS ---
                     const analysisRes = await api.get('/analysis/full');
                     setRiskAssessment(analysisRes.data);
-
                     const metricsRes = await axios.get(`http://localhost:5000/api/health-metrics?location=${user.location}`);
                     setMetrics(metricsRes.data);
                 } else {
-                    // --- EXISTING LOGIC FOR GUESTS ---
                     const metricsRes = await axios.get(`http://localhost:5000/api/health-metrics`);
                     setMetrics(metricsRes.data);
                     setRiskAssessment(calculateGuestRiskScore(metricsRes.data));
@@ -55,18 +53,14 @@ const Dashboard = ({ onNavigate }) => {
                 setLoading(false);
             }
         };
-
         fetchData();
     }, [user]);
 
     if (loading) return <div style={styles.centerMessage}>Analyzing your health data...</div>;
-    if (error) return <div style={{...styles.centerMessage, color: '#ff4d4d'}}>{error}</div>;
-    if (!metrics || !riskAssessment) return <div style={styles.centerMessage}>Could not load data.</div>;
+    // ... rest of the component remains the same until the header ...
 
     const { location, weather, air_quality } = metrics;
     const { riskScore, riskLevel, summary, recommendations } = riskAssessment;
-
-    const getAqiColor = (aqi) => (aqi <= 2 ? '#4caf50' : aqi <= 4 ? '#ff9800' : '#f44336');
     const getRiskColor = (level) => {
         switch (level) {
             case 'Low': return '#4caf50';
@@ -76,6 +70,7 @@ const Dashboard = ({ onNavigate }) => {
             default: return '#718096';
         }
     };
+     const getAqiColor = (aqi) => (aqi <= 2 ? '#4caf50' : aqi <= 4 ? '#ff9800' : '#f44336');
 
     return (
         <div style={styles.dashboard}>
@@ -87,6 +82,10 @@ const Dashboard = ({ onNavigate }) => {
                 <div style={styles.headerActions}>
                     {user ? (
                         <>
+                            {/* --- NEW CHAT BUTTON --- */}
+                            <button onClick={() => onNavigate('chat')} style={styles.navButton}>
+                                Ask AI
+                            </button>
                             <button onClick={() => onNavigate('profile')} style={styles.navButton}>My Profile</button>
                             <button onClick={logout} style={styles.authButton}>Logout</button>
                         </>
@@ -100,7 +99,8 @@ const Dashboard = ({ onNavigate }) => {
             </header>
 
             <main style={styles.main}>
-                <div style={{ ...styles.card, ...styles.riskCard, borderColor: getRiskColor(riskLevel) }}>
+               {/* Rest of the dashboard content remains the same */}
+               <div style={{ ...styles.card, ...styles.riskCard, borderColor: getRiskColor(riskLevel) }}>
                     <h2 style={styles.cardTitle}>Overall Health Risk</h2>
                     <div style={styles.riskDisplay}>
                         <div style={{...styles.riskScoreCircle, backgroundColor: getRiskColor(riskLevel)}}>
@@ -116,7 +116,6 @@ const Dashboard = ({ onNavigate }) => {
                         </ul>
                     </div>
                 </div>
-                {/* --- ALL METRICS ARE PRESENT --- */}
                  <div style={styles.card}>
                     <h2 style={styles.cardTitle}>Current Weather</h2>
                     <div style={styles.weatherMain}>
