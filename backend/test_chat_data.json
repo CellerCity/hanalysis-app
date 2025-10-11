@@ -1,0 +1,8 @@
+{
+  "history": [
+    {
+      "role": "user",
+      "content": "Given my profile and the current weather, what's my biggest health risk today?"
+    }
+  ]
+}

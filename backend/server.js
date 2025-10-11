@@ -18,11 +18,13 @@ app.use(express.json());
 // --- API Routes ---
 const userRoutes = require('./routes/userRoutes');
 const profileRoutes = require('./routes/profileRoutes');
-const analysisRoutes = require('./routes/analysisRoutes'); // Import the new analysis routes
+const analysisRoutes = require('./routes/analysisRoutes');
+const chatRoutes = require('./routes/chatRoutes'); // Import the new chat routes
 
 app.use('/api/users', userRoutes);
 app.use('/api/profile', profileRoutes);
-app.use('/api/analysis', analysisRoutes); // Use the new analysis routes
+app.use('/api/analysis', analysisRoutes);
+app.use('/api/chat', chatRoutes); // Use the new chat routes
 
 // Root Route
 app.get('/', (req, res) => {
