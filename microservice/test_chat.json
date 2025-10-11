@@ -1,0 +1,32 @@
+{
+  "userProfile": {
+    "age": 45,
+    "healthProfile": {
+      "preExistingConditions": ["Asthma"],
+      "allergies": []
+    }
+  },
+  "weather": {
+    "location": { "name": "Delhi" },
+    "weather": { "temperature_celsius": 38 },
+    "air_quality": { "us_epa_index": 4 }
+  },
+  "history": [
+    {
+      "role": "user",
+      "content": "What are my main risks today?"
+    },
+    {
+      "role": "model",
+      "content": "Your main risk is from the high air pollution in Delhi, which is unhealthy for individuals with asthma."
+    },
+    {
+      "role": "user",
+      "content": "Okay, thanks. Is it safe to go for a short walk in the evening?"
+    }
+  ]
+}
+
+
+
+    

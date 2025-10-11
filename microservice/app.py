@@ -7,16 +7,14 @@ import pandas as pd
 import google.generativeai as genai
 import json
 
-# Load environment variables
+# Load environment variables and configure the Gemini API
 load_dotenv()
-
-# --- Configure the Gemini API ---
 try:
     GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
     if not GOOGLE_API_KEY:
         raise ValueError("GOOGLE_API_KEY not found in .env file.")
     genai.configure(api_key=GOOGLE_API_KEY)
-    # --- THE FIX: Using a stable model name from the provided list ---
+    
     model_name = os.getenv('LLM_MODEL_NAME', 'models/gemini-flash-latest')
     print(f"--- Using Gemini Model: {model_name} ---")
     model = genai.GenerativeModel(model_name)
@@ -30,19 +28,17 @@ app = Flask(__name__)
 CORS(app)
 
 
-# --- Helper function for the LLM Prompt ---
-def create_llm_prompt(data):
-    """Formats all combined data into a detailed prompt for the LLM."""
-    user_profile = data.get('userProfile', {})
-    weather_data_from_node = data.get('weather', {})
-    trends_data = data.get('trends', [])
+# --- Helper functions for LLM Prompts ---
 
-    # Access data from the correct nested levels
+def create_analysis_prompt(data):
+    """Formats data for the one-shot dashboard analysis."""
+    # ... This function remains unchanged ...
+    user_profile = data.get('userProfile', {})
+    weather = data.get('weather', {})
+    air_quality = weather.get('air_quality', {})
+    trends_data = data.get('trends', [])
     home_location = user_profile.get('location', 'N/A')
-    current_location_obj = weather_data_from_node.get('location', {})
-    current_weather_obj = weather_data_from_node.get('weather', {})
-    air_quality_obj = weather_data_from_node.get('air_quality', {})
-    
+    current_location = weather.get('location', {}).get('name', 'N/A')
     trends_summary = "No significant trend data available."
     if trends_data:
         if isinstance(trends_data, list) and trends_data:
@@ -50,32 +46,50 @@ def create_llm_prompt(data):
             trend_points = [f"'{key}' interest is {value}/100" for key, value in latest_trends.items() if key != 'date']
             if trend_points:
                 trends_summary = ", ".join(trend_points) + "."
+    return f"""
+    You are HANALYSIS, a helpful health assistant. Your response MUST be a clean JSON object with four keys: "riskScore", "riskLevel", "summary", and "recommendations".
+    Analyze the following data.
+    User Profile: Age {user_profile.get('age', 'N/A')}, Home: {home_location}, Conditions: {', '.join(user_profile.get('healthProfile', {}).get('preExistingConditions', [])) or 'None'}, Allergies: {', '.join(user_profile.get('healthProfile', {}).get('allergies', [])) or 'None'}.
+    Environmental Data: Current Location: {current_location}, Temp: {weather.get('weather', {}).get('temperature_celsius', 'N/A')}°C, Humidity: {weather.get('weather', {}).get('humidity_percent', 'N/A')}%, AQI: {air_quality.get('us_epa_index', 'N/A')}.
+    Local Search Trends: {trends_summary}
+    """
 
-    prompt = f"""
-    You are HANALYSIS, a helpful and cautious personal health assistant. 
-    Your goal is to provide a risk assessment and actionable recommendations based on the user's profile and real-time environmental data. 
-    Your response MUST be a clean JSON object with four keys: "riskScore" (a number from 1 to 10, where 10 is the highest risk), "riskLevel" (string: "Low", "Moderate", "High", or "Very High"), "summary" (a concise, one-sentence explanation), and "recommendations" (a list of 3-4 string bullet points).
+# --- NEW: Helper function for building the conversational prompt ---
+def create_chat_message_list(data):
+    """Formats all data into a list of messages for a conversational AI model."""
+    user_profile = data.get('userProfile', {})
+    weather = data.get('weather', {})
+    air_quality = weather.get('air_quality', {})
+    chat_history = data.get('history', [])
     
-    Analyze the following data. Pay special attention if the user's current location is different from their home location and if local search trends indicate a potential health concern.
+    # Create the initial system instruction and context
+    system_instruction = f"""
+    You are HANALYSIS, a helpful and cautious personal health assistant. 
+    Answer the user's questions based on their profile and the real-time data provided below. Be conversational and concise.
 
-    **User Profile:**
+    **Current User Profile:**
     - Age: {user_profile.get('age', 'N/A')}
-    - Home Location: {home_location}
-    - Pre-existing Conditions: {', '.join(user_profile.get('healthProfile', {}).get('preExistingConditions', [])) or 'None'}
+    - Conditions: {', '.join(user_profile.get('healthProfile', {}).get('preExistingConditions', [])) or 'None'}
     - Allergies: {', '.join(user_profile.get('healthProfile', {}).get('allergies', [])) or 'None'}
 
-    **Environmental Data:**
-    - Current Location: {current_location_obj.get('name', 'N/A')}
-    - Temperature: {current_weather_obj.get('temperature_celsius', 'N/A')}°C
-    - Humidity: {current_weather_obj.get('humidity_percent', 'N/A')}%
-    - Air Quality (US EPA Index): {air_quality_obj.get('us_epa_index', 'N/A')} (1=Good, 2=Moderate, 3=Unhealthy for Sensitive, 4=Unhealthy)
-    - PM2.5: {air_quality_obj.get('pm2_5', 'N/A')} µg/m³
-
-    **Local Search Trends (Interest out of 100):**
-    - {trends_summary}
+    **Current Environmental Data:**
+    - Location: {weather.get('location', {}).get('name', 'N/A')}
+    - Temperature: {weather.get('weather', {}).get('temperature_celsius', 'N/A')}°C
+    - Air Quality (US EPA Index): {air_quality.get('us_epa_index', 'N/A')}
     """
-    return prompt
+    
+    # Construct the message history in the format the API expects
+    messages = [{"role": "user", "parts": [{"text": system_instruction}]}]
+    messages.append({"role": "model", "parts": [{"text": "Understood. I am ready to help with this context."}]})
 
+    # Add the existing chat history
+    for message in chat_history:
+        messages.append({
+            "role": message["role"],
+            "parts": [{"text": message["content"]}]
+        })
+        
+    return messages
 
 # --- API ROUTES ---
 
@@ -83,10 +97,11 @@ def create_llm_prompt(data):
 def index():
     return jsonify({"message": "Welcome to the HANALYSIS Flask Microservice!"})
 
-
+# ... (The /api/trends and /api/analyze routes remain unchanged) ...
 @app.route('/api/trends')
 def get_trends():
     try:
+        # ... implementation ...
         keywords_str = request.args.get('keywords', 'fever')
         geo_location = request.args.get('geo', 'IN')
         keywords_list = [kw.strip() for kw in keywords_str.split(',')]
@@ -101,29 +116,44 @@ def get_trends():
         print(f"An error occurred in trends: {e}")
         return jsonify({"error": "Failed to fetch Google Trends data."}), 500
 
-
 @app.route('/api/analyze', methods=['POST'])
 def analyze_health_data():
-    if not model:
-        return jsonify({"error": "AI model is not configured. Check server logs."}), 503
     try:
+        # ... implementation ...
         combined_data = request.get_json()
         if not combined_data: return jsonify({"error": "Invalid request body."}), 400
-        
-        prompt = create_llm_prompt(combined_data)
+        prompt = create_analysis_prompt(combined_data)
         response = model.generate_content(prompt)
-        
-        print("--- RAW LLM RESPONSE ---")
-        print(response.text)
-        print("------------------------")
-        
         response_text = response.text.strip().replace('```json', '').replace('```', '')
         analysis_json = json.loads(response_text)
-        
         return jsonify(analysis_json)
     except Exception as e:
         print(f"An error occurred during analysis: {e}")
         return jsonify({"error": "Failed to get analysis from the AI model."}), 500
+
+# --- NEW: Chat Endpoint ---
+@app.route('/api/chat', methods=['POST'])
+def handle_chat():
+    """Handles a turn in the conversation."""
+    if not model:
+        return jsonify({"error": "AI model is not configured."}), 503
+    try:
+        data = request.get_json()
+        if not data or 'history' not in data:
+            return jsonify({"error": "Invalid request: JSON with 'history' key required."}), 400
+            
+        # 1. Build the full message list with system instructions and history
+        messages = create_chat_message_list(data)
+        
+        # 2. Generate the response
+        response = model.generate_content(messages)
+        
+        # 3. Return the AI's reply
+        return jsonify({"reply": response.text})
+
+    except Exception as e:
+        print(f"An error occurred during chat: {e}")
+        return jsonify({"error": "Failed to get chat response from the AI model."}), 500
 
 
 if __name__ == '__main__':
