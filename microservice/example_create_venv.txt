@@ -1,0 +1,9 @@
+git clone https://github.com/your-repo/hanalysis-app.git
+
+cd hanalysis-app/microservice
+
+python -m venv venv (Create their own clean venv)
+
+.\venv\Scripts\Activate (Activate it)
+
+pip install -r requirements.txt
