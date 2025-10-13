@@ -34,9 +34,20 @@ router.post('/', protect, async (req, res) => {
             air_quality: weatherData.current.air_quality,
         };
 
+        // --- THE FIX: Defensively build the userProfile object ---
+        // This ensures that even for a new user, healthProfile and its arrays always exist.
+        const safeUserProfile = {
+            age: user.age,
+            location: user.location, // Home location
+            healthProfile: {
+                preExistingConditions: user.healthProfile?.preExistingConditions || [],
+                allergies: user.healthProfile?.allergies || []
+            }
+        };
+
         // 2. --- Combine All Data for the Microservice ---
         const payload = {
-            userProfile: user.toObject(), // Convert mongoose document to plain object
+            userProfile: safeUserProfile, // Use the safe object
             weather: structuredWeatherData,
             history: history
         };
@@ -57,3 +68,4 @@ router.post('/', protect, async (req, res) => {
 });
 
 module.exports = router;
+
