@@ -22,15 +22,13 @@ router.get('/full', protect, async (req, res) => {
             air_quality: weatherData.current.air_quality,
         };
 
-        // --- ENHANCED CACHING LOGIC ---
         let trendsData;
-        // Generate a geo code. Example: "IN-WB" for West Bengal.
         const geoCode = weatherData.location.country === 'India' 
             ? `IN-${weatherData.location.region.replace(/\s+/g, '').substring(0, 2).toUpperCase()}` 
             : weatherData.location.country_iso2;
         
         const cache = await TrendsCache.findOne({ geo: geoCode });
-        const oneDay = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+        const oneDay = 24 * 60 * 60 * 1000;
 
         if (cache && (new Date() - cache.lastFetched) < oneDay) {
             console.log(`[CACHE HIT] Using cached trends for ${geoCode}`);
@@ -38,16 +36,21 @@ router.get('/full', protect, async (req, res) => {
         } else {
             console.log(`[CACHE MISS] Fetching new trends for ${geoCode}`);
             try {
-                // --- THE FIX: Always use a standard set of keywords for caching ---
-                // This maximizes cache hits and minimizes requests to Google.
-                const standardTrendKeywords = ['fever', 'cough', 'flu', 'dengue', 'malaria'];
+                const standardKeywords = ['fever', 'cough', 'flu', 'dengue', 'malaria'];
+                let trendKeywords = [...standardKeywords];
+
+                if (user.healthProfile && user.healthProfile.allergies && user.healthProfile.allergies.includes('Pollen')) {
+                    trendKeywords.push('pollen count');
+                }
+                if (user.healthProfile && user.healthProfile.preExistingConditions && user.healthProfile.preExistingConditions.includes('Asthma')) {
+                    trendKeywords.push('asthma attack');
+                }
 
                 const trendsResponse = await axios.get(`${MICROSERVICE_URL}/api/trends`, {
-                    params: { keywords: standardTrendKeywords.join(','), geo: geoCode }
+                    params: { keywords: trendKeywords.join(','), geo: geoCode }
                 });
                 trendsData = trendsResponse.data;
                 
-                // Save the new generic data to the cache
                 await TrendsCache.findOneAndUpdate(
                     { geo: geoCode },
                     { data: trendsData, lastFetched: new Date() },
@@ -55,13 +58,27 @@ router.get('/full', protect, async (req, res) => {
                 );
             } catch (trendError) {
                 console.error("Failed to fetch new trends, using stale cache if available.", trendError.message);
-                // If the fetch fails, use the old data if we have it, otherwise proceed with none.
                 trendsData = cache ? cache.data : []; 
             }
         }
-        // --- END OF CACHING LOGIC ---
 
-        const combinedData = { userProfile: user, weather: structuredWeatherData, trends: trendsData };
+        // --- THE FIX: Defensively build the userProfile object ---
+        // This ensures that even for a new user, healthProfile and its arrays always exist.
+        const safeUserProfile = {
+            age: user.age,
+            location: user.location, // Home location
+            healthProfile: {
+                preExistingConditions: user.healthProfile?.preExistingConditions || [],
+                allergies: user.healthProfile?.allergies || []
+            }
+        };
+
+        const combinedData = { 
+            userProfile: safeUserProfile, 
+            weather: structuredWeatherData, 
+            trends: trendsData 
+        };
+        
         const analysisResponse = await axios.post(`${MICROSERVICE_URL}/api/analyze`, combinedData);
         
         res.json(analysisResponse.data);

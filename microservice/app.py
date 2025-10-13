@@ -7,30 +7,25 @@ import pandas as pd
 import google.generativeai as genai
 import json
 
-# Load environment variables
+# Load environment variables and configure the Gemini API
+# ... (Configuration remains the same) ...
 load_dotenv()
-
-# Configure the Gemini API
 try:
     GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
     if not GOOGLE_API_KEY:
-        raise ValueError("GOOGLE_API_KEY not found in .env file.")
+        raise ValueError("GOOGLE_API_KEY not found.")
     genai.configure(api_key=GOOGLE_API_KEY)
-    
-    model_name = os.getenv('LLM_MODEL_NAME', 'models/gemini-flash-latest')
+    model_name = os.getenv('LLM_MODEL_NAME', 'models/gemini-pro')
     print(f"--- Using Gemini Model: {model_name} ---")
     model = genai.GenerativeModel(model_name)
-
 except Exception as e:
     print(f"FATAL ERROR: Failed to configure Google AI. {e}")
     model = None
 
-# Initialize Flask App
 app = Flask(__name__)
 CORS(app)
 
-
-# --- Helper function for the Dashboard Analysis Prompt ---
+# ... (All helper functions and other routes remain the same) ...
 def create_analysis_prompt(data):
     user_profile = data.get('userProfile', {})
     weather = data.get('weather', {})
@@ -48,14 +43,11 @@ def create_analysis_prompt(data):
     return f"""
     You are HANALYSIS, a helpful and cautious personal health assistant. 
     Your response MUST be a clean JSON object with four keys: "riskScore" (an integer between 1 and 10), "riskLevel" (string: "Low", "Moderate", "High", or "Very High"), "summary" (a concise, one-sentence explanation), and "recommendations" (a list of 3-4 string bullet points).
-    Do not deviate from the 1-10 scale for the risk score.
-    Analyze the following data.
+    Do not deviate from the 1-10 scale for the risk score. Analyze the following data.
     User Profile: Age {user_profile.get('age', 'N/A')}, Home: {home_location}, Conditions: {', '.join(user_profile.get('healthProfile', {}).get('preExistingConditions', [])) or 'None'}, Allergies: {', '.join(user_profile.get('healthProfile', {}).get('allergies', [])) or 'None'}.
     Environmental Data: Current Location: {current_location}, Temp: {weather.get('weather', {}).get('temperature_celsius', 'N/A')}°C, Humidity: {weather.get('weather', {}).get('humidity_percent', 'N/A')}%, AQI: {air_quality.get('us_epa_index', 'N/A')}.
     Local Search Trends: {trends_summary}
     """
-
-# --- Helper function for the Conversational Chat Prompt ---
 def create_chat_message_list(data):
     user_profile = data.get('userProfile', {})
     weather = data.get('weather', {})
@@ -71,13 +63,9 @@ def create_chat_message_list(data):
     for message in chat_history:
         messages.append({"role": "user" if message["role"] == "user" else "model", "parts": [{"text": message["content"]}]})
     return messages
-
-# --- API ROUTES ---
-
 @app.route('/')
 def index():
     return jsonify({"message": "Welcome to the HANALYSIS Flask Microservice!"})
-
 @app.route('/api/trends')
 def get_trends():
     try:
@@ -94,7 +82,6 @@ def get_trends():
     except Exception as e:
         print(f"An error occurred in trends: {e}")
         return jsonify({"error": "Failed to fetch Google Trends data."}), 500
-
 @app.route('/api/analyze', methods=['POST'])
 def analyze_health_data():
     if not model: return jsonify({"error": "AI model is not configured."}), 503
@@ -109,20 +96,35 @@ def analyze_health_data():
         print(f"An error occurred during analysis: {e}")
         return jsonify({"error": "Failed to get analysis from AI model."}), 500
 
-# --- THE FIX: ADDING THE CHAT ENDPOINT BACK ---
+# --- UPDATED CHAT ENDPOINT ---
 @app.route('/api/chat', methods=['POST'])
 def handle_chat():
-    if not model: return jsonify({"error": "AI model is not configured."}), 503
+    if not model:
+        return jsonify({"error": "AI model is not configured."}), 503
     try:
         data = request.get_json()
         if not data or 'history' not in data:
             return jsonify({"error": "Invalid request: JSON with 'history' required."}), 400
+        
         messages = create_chat_message_list(data)
         response = model.generate_content(messages)
+        
+        # --- THE FIX for the Chat Error ---
+        # Check if the response was blocked before trying to access .text
+        if not response.parts:
+            # Check for safety feedback from the API
+            if response.prompt_feedback and response.prompt_feedback.block_reason:
+                print(f"Chat blocked due to: {response.prompt_feedback.block_reason.name}")
+                return jsonify({"reply": "I'm sorry, I can't respond to that. Please ask a different health-related question."})
+            else:
+                # Handle other cases of empty response
+                return jsonify({"reply": "I'm sorry, I was unable to generate a response. Please try again."})
+
         return jsonify({"reply": response.text})
+
     except Exception as e:
         print(f"An error occurred during chat: {e}")
-        return jsonify({"error": "Failed to get chat response from AI model."}), 500
+        return jsonify({"error": "Failed to get chat response from the AI model."}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('FLASK_PORT', 8000))
