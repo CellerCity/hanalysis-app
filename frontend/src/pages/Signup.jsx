@@ -1,16 +1,23 @@
 import React, { useState } from 'react';
-import axios from 'axios';
-import { useAuth } from '../context/AuthContext.jsx';
+import { useAuth } from '../context/AuthContext';
+import api from '../api/api'; // Use our centralized API client
 
 const Signup = ({ onNavigate }) => {
     const { handleAuthentication } = useAuth();
     const [formData, setFormData] = useState({
-        name: '', email: '', password: '', confirmPassword: '', age: '',
-        location: '', preExistingConditions: '', allergies: ''
+        name: '',
+        email: '',
+        password: '',
+        confirmPassword: '',
+        age: '',
+        location: '',
+        preExistingConditions: '',
+        allergies: ''
     });
     const [error, setError] = useState('');
 
     const { name, email, password, confirmPassword, age, location, preExistingConditions, allergies } = formData;
+
     const onChange = e => setFormData({ ...formData, [e.target.name]: e.target.value });
 
     const onSubmit = async e => {
@@ -20,11 +27,14 @@ const Signup = ({ onNavigate }) => {
         if (password.length < 6) { return setError('Password must be at least 6 characters'); }
         try {
             const newUser = { name, email, password, age, location, preExistingConditions, allergies };
-            const { data } = await axios.post('http://localhost:5000/api/users/register', newUser);
+            // --- THE FIX: Use the 'api' client instead of global axios ---
+            const { data } = await api.post('/users/register', newUser);
+            
             handleAuthentication(data.token);
-            // After signup, the useEffect in App.jsx will handle navigation automatically.
+
         } catch (err) {
             setError(err.response?.data?.message || 'Something went wrong');
+            console.error(err);
         }
     };
 
@@ -68,3 +78,4 @@ const styles = {
 };
 
 export default Signup;
+

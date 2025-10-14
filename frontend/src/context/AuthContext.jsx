@@ -1,7 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
-import api from '../api/api';
 
 const AuthContext = createContext(null);
 
@@ -13,45 +11,34 @@ export const AuthProvider = ({ children }) => {
 
     const handleAuthentication = (token) => {
         localStorage.setItem('token', token);
-        const decoded = jwtDecode(token);
-        setUser(decoded);
+        try {
+            const decoded = jwtDecode(token);
+            setUser(decoded);
+        } catch (error) {
+            console.error("Invalid token:", error);
+            localStorage.removeItem('token');
+            setUser(null);
+        }
     };
 
     useEffect(() => {
         const token = localStorage.getItem('token');
         if (token) {
-            try {
-                handleAuthentication(token);
-            } catch (error) {
-                // Handle expired or invalid token
-                localStorage.removeItem('token');
-                setUser(null);
-            }
+            handleAuthentication(token);
         }
         setLoading(false);
     }, []);
-
-    const login = async (email, password) => {
-        try {
-            const { data } = await axios.post('http://localhost:5000/api/users/login', { email, password });
-            handleAuthentication(data.token);
-            return data;
-        } catch (error) {
-            console.error("Login failed:", error.response?.data?.message || error.message);
-            throw new Error(error.response?.data?.message || 'Login failed');
-        }
-    };
 
     const logout = () => {
         localStorage.removeItem('token');
         setUser(null);
     };
 
-    const value = { user, loading, login, logout, handleAuthentication };
+    const value = { user, loading, logout, handleAuthentication };
 
     return (
         <AuthContext.Provider value={value}>
-            {children}
+            {!loading && children}
         </AuthContext.Provider>
     );
 };

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { useAuth } from '../context/AuthContext.jsx';
+import { useAuth } from '../context/AuthContext';
+import api from '../api/api'; // Use our centralized API client
 
 const Login = ({ onNavigate }) => {
-    const { login } = useAuth();
+    const { handleAuthentication } = useAuth();
     const [formData, setFormData] = useState({ email: '', password: '' });
     const [error, setError] = useState('');
     const { email, password } = formData;
@@ -13,10 +14,12 @@ const Login = ({ onNavigate }) => {
         e.preventDefault();
         setError('');
         try {
-            await login(email, password);
-            // After login, the useEffect in App.jsx will handle navigation automatically.
+            // --- THE FIX: Use the 'api' client directly ---
+            const { data } = await api.post('/users/login', { email, password });
+            handleAuthentication(data.token);
+            // Navigation will be handled by App.jsx's re-render
         } catch (err) {
-            setError(err.message || 'Failed to login');
+            setError(err.response?.data?.message || 'Failed to login');
         }
     };
 
@@ -59,3 +62,4 @@ const styles = {
 };
 
 export default Login;
+
