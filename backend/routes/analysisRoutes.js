@@ -17,7 +17,7 @@ router.get('/full', protect, async (req, res) => {
         const weatherResponse = await axios.get(weatherUrl);
         const weatherData = weatherResponse.data;
 
-        const structuredWeatherData = { /* ... structure is the same ... */ 
+        const structuredWeatherData = { 
             location: weatherData.location,
             weather: { temperature_celsius: weatherData.current.temp_c, humidity_percent: weatherData.current.humidity },
             air_quality: weatherData.current.air_quality,
@@ -39,8 +39,9 @@ router.get('/full', protect, async (req, res) => {
                     params: { keywords: standardKeywords.join(','), geo: geoCode }
                 });
                 
-                // --- THE FIX: Only save to cache if the response is valid and not empty ---
+                // --- THE FIX: Only update the cache if the new data is valid and not empty ---
                 if (trendsResponse.data && Array.isArray(trendsResponse.data) && trendsResponse.data.length > 0) {
+                    console.log(`[CACHE UPDATE] Saving new trends data for ${geoCode}.`);
                     trendsData = trendsResponse.data;
                     await TrendsCache.findOneAndUpdate(
                         { geo: geoCode },
@@ -48,13 +49,13 @@ router.get('/full', protect, async (req, res) => {
                         { upsert: true, new: true }
                     );
                 } else {
-                    // If the response is empty, use old data if we have it
+                    // If the live response is empty, use the old, stale data if it exists.
                     console.log("Received empty trends data, using stale cache if available.");
                     trendsData = cache ? cache.data : [];
                 }
             } catch (trendError) {
                 console.error("Failed to fetch new trends, using stale cache if available.", trendError.message);
-                // If the fetch fails, use the old data if we have it
+                // If the fetch fails completely, use the old data if we have it.
                 trendsData = cache ? cache.data : []; 
             }
         }
@@ -80,4 +81,3 @@ router.get('/full', protect, async (req, res) => {
 });
 
 module.exports = router;
-
