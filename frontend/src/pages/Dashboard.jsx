@@ -5,23 +5,8 @@ import api from '../api/api';
 
 // Helper Components (no changes)
 const SunIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>;
-const WindIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"></path></svg>;
-const DropletIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path></svg>;
-
-const calculateGuestRiskScore = (metrics) => {
-    // ... function remains the same
-    let score = 0;
-    const recommendations = [];
-    const { weather, air_quality } = metrics;
-    if (weather.temperature_celsius > 35) { score += 3; recommendations.push("High temperature: Stay hydrated and avoid prolonged sun exposure."); }
-    if (weather.humidity_percent > 85) { score += 2; recommendations.push("High humidity: Air may feel heavy. Good for hydration but can affect breathing for some."); }
-    if (weather.uv_index > 6) { score += 3; recommendations.push("High UV Index: Use sunscreen and wear protective clothing."); }
-    if (air_quality.us_epa_index >= 3) { score += 4; recommendations.push("Poor Air Quality: Limit strenuous outdoor activities."); }
-    let level;
-    if (score <= 2) level = 'Low'; else if (score <= 5) level = 'Moderate'; else level = 'High';
-    if (recommendations.length === 0) recommendations.push("Environmental conditions seem favorable. Sign up for personalized advice!");
-    return { riskScore: score, riskLevel: level, recommendations, summary: "A general risk assessment based on local weather." };
-};
+const WindIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"></path></svg>;
+const DropletIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path></svg>;
 
 const Dashboard = ({ onNavigate }) => {
     const { user, logout } = useAuth();
@@ -36,11 +21,12 @@ const Dashboard = ({ onNavigate }) => {
             setError('');
             try {
                 if (user) {
-                    const analysisRes = await api.get('/analysis/full');
-                    setRiskAssessment(analysisRes.data);
-                    const metricsRes = await axios.get(`http://localhost:5000/api/health-metrics?location=${user.location}`);
-                    setMetrics(metricsRes.data);
+                    // --- THE FIX: Make a single, robust API call for logged-in users ---
+                    const { data } = await api.get('/analysis/full');
+                    setRiskAssessment(data.analysis);
+                    setMetrics(data.metrics);
                 } else {
+                    // Logic for guests remains the same
                     const { data } = await axios.get(`http://localhost:5000/api/health-metrics`);
                     setMetrics(data);
                     setRiskAssessment(data.analysis);
@@ -56,14 +42,19 @@ const Dashboard = ({ onNavigate }) => {
         fetchData();
     }, [user]);
 
-    if (loading) return <div style={styles.centerMessage}>Analyzing health data...</div>;
+    if (loading) return <div style={styles.centerMessage}>Analyzing your health data...</div>;
     if (error) return <div style={{...styles.centerMessage, color: '#ff4d4d'}}>{error}</div>;
-    if (!metrics || !riskAssessment) return <div style={styles.centerMessage}>Could not load data.</div>;
-
-    const { location, weather, air_quality } = metrics;
+    if (!metrics?.location || !riskAssessment?.recommendations) {
+         return <div style={styles.centerMessage}>Could not load complete data for your location. Please try again later.</div>;
+    }
+    
+    // --- Graceful data handling ---
+    const location = metrics.location || {};
+    const weather = metrics.weather || {};
+    const air_quality = metrics.air_quality || {};
     const { riskScore, riskLevel, summary, recommendations } = riskAssessment;
     
-    const getAqiColor = (aqi) => (aqi <= 2 ? '#4caf50' : aqi <= 4 ? '#ff9800' : '#f44336');
+    const getAqiColor = (aqi) => (!aqi || aqi <= 2 ? '#4caf50' : aqi <= 4 ? '#ff9800' : '#f44336');
     const getRiskColor = (level) => {
         switch (level) {
             case 'Low': return '#4caf50';
@@ -97,60 +88,60 @@ const Dashboard = ({ onNavigate }) => {
                 </div>
             </header>
             <main style={styles.main}>
-                <div style={{ ...styles.card, ...styles.riskCard, borderColor: getRiskColor(riskLevel) }}>
-                    <h2 style={styles.cardTitle}>Overall Health Risk</h2>
-                    <div style={styles.riskDisplay}>
-                        <div style={{...styles.riskScoreCircle, backgroundColor: getRiskColor(riskLevel)}}>
-                            <span style={styles.riskScoreText}>{riskScore}</span>
+                <div style={styles.subGrid}>
+                    <div style={{ ...styles.card, ...styles.riskCard, borderColor: getRiskColor(riskLevel), gridColumn: '1 / -1' }}>
+                        <h2 style={styles.cardTitle}>Overall Health Risk</h2>
+                        {riskScore && <div style={styles.riskDisplay}>
+                            <div style={{...styles.riskScoreCircle, backgroundColor: getRiskColor(riskLevel)}}>
+                                <span style={styles.riskScoreText}>{riskScore}</span>
+                            </div>
+                            <span style={{...styles.riskLevel, color: getRiskColor(riskLevel)}}>{riskLevel}</span>
+                        </div>}
+                        <p style={styles.summaryText}>{summary}</p>
+                        <div style={styles.recommendations}>
+                            <h3 style={styles.recommendationsTitle}>Recommendations:</h3>
+                            <ul style={styles.recommendationsList}>
+                                {recommendations.map((rec, index) => <li key={index}>{rec}</li>)}
+                            </ul>
                         </div>
-                        <span style={{...styles.riskLevel, color: getRiskColor(riskLevel)}}>{riskLevel}</span>
                     </div>
-                     <p style={styles.summaryText}>{summary}</p>
-                    <div style={styles.recommendations}>
-                        <h3 style={styles.recommendationsTitle}>Recommendations:</h3>
-                        {/* --- THE FIX: Robustly render the recommendations list --- */}
-                        <ul style={styles.recommendationsList}>
-                            {recommendations && recommendations.map((rec, index) => {
-                                // Check if 'rec' is a string or an object
-                                if (typeof rec === 'string') {
-                                    return <li key={index}>{rec}</li>;
-                                }
-                                // If it's an object, try to find a reasonable value to display
-                                if (typeof rec === 'object' && rec !== null) {
-                                    const recommendationText = rec.recommendation || rec.measure || rec.content || JSON.stringify(rec);
-                                    return <li key={index}>{recommendationText}</li>;
-                                }
-                                return null;
-                            })}
-                        </ul>
+                    <div style={styles.card}>
+                        <h2 style={styles.cardTitle}>Current Weather</h2>
+                        {weather?.temperature_celsius ? (
+                            <>
+                                <div style={styles.weatherMain}>
+                                    <span style={styles.weatherTemp}>{weather.temperature_celsius}°C</span>
+                                    <span style={styles.weatherCondition}>{weather.condition}</span>
+                                </div>
+                                <div style={styles.metricGrid}>
+                                    <div style={styles.metricItem}><DropletIcon /> Humidity: {weather.humidity_percent}%</div>
+                                    <div style={styles.metricItem}><WindIcon /> Wind: {weather.wind_kph} kph</div>
+                                    <div style={styles.metricItem}><SunIcon /> UV Index: {weather.uv_index}</div>
+                                    <div style={styles.metricItem}><DropletIcon /> Rainfall: {weather.rainfall_mm} mm</div>
+                                </div>
+                            </>
+                        ) : (
+                            <p style={styles.noDataText}>Weather data not available for this location.</p>
+                        )}
                     </div>
-                </div>
-                 <div style={styles.card}>
-                    <h2 style={styles.cardTitle}>Current Weather</h2>
-                    <div style={styles.weatherMain}>
-                        <span style={styles.weatherTemp}>{weather.temperature_celsius}°C</span>
-                        <span style={styles.weatherCondition}>{weather.condition}</span>
-                    </div>
-                    <div style={styles.metricGrid}>
-                        <div style={styles.metricItem}><DropletIcon /> Humidity: {weather.humidity_percent}%</div>
-                        <div style={styles.metricItem}><WindIcon /> Wind: {weather.wind_kph} kph</div>
-                        <div style={styles.metricItem}><SunIcon /> UV Index: {weather.uv_index}</div>
-                        <div style={styles.metricItem}><DropletIcon /> Rainfall: {weather.rainfall_mm} mm</div>
-                    </div>
-                </div>
-                <div style={styles.card}>
-                    <h2 style={styles.cardTitle}>Air Quality Index (AQI)</h2>
-                    <div style={{ ...styles.aqiValue, color: getAqiColor(air_quality.us_epa_index) }}>
-                        {air_quality.us_epa_index}
-                        <span style={styles.aqiLabel}>US EPA Index</span>
-                    </div>
-                    <div style={styles.metricGrid}>
-                        <div style={styles.metricItem}>PM2.5: {air_quality.pm2_5.toFixed(2)} µg/m³</div>
-                        <div style={styles.metricItem}>PM10: {air_quality.pm10.toFixed(2)} µg/m³</div>
-                        <div style={styles.metricItem}>O₃: {air_quality.o3.toFixed(2)} µg/m³</div>
-                        <div style={styles.metricItem}>NO₂: {air_quality.no2.toFixed(2)} µg/m³</div>
-                        <div style={styles.metricItem}>SO₂: {air_quality.so2.toFixed(2)} µg/m³</div>
-                        <div style={styles.metricItem}>CO: {air_quality.co.toFixed(2)} µg/m³</div>
+                    <div style={styles.card}>
+                        <h2 style={styles.cardTitle}>Air Quality Index (AQI)</h2>
+                        {air_quality?.us_epa_index ? (
+                            <>
+                                <div style={{ ...styles.aqiValue, color: getAqiColor(air_quality.us_epa_index) }}>
+                                    {air_quality.us_epa_index}
+                                    <span style={styles.aqiLabel}>US EPA Index</span>
+                                </div>
+                                <div style={styles.metricGrid}>
+                                    <div style={styles.metricItem}>PM2.5: {air_quality.pm2_5.toFixed(2)} µg/m³</div>
+                                    <div style={styles.metricItem}>PM10: {air_quality.pm10.toFixed(2)} µg/m³</div>
+                                    <div style={styles.metricItem}>O₃: {air_quality.o3.toFixed(2)} µg/m³</div>
+                                    <div style={styles.metricItem}>NO₂: {air_quality.no2.toFixed(2)} µg/m³</div>
+                                </div>
+                            </>
+                        ) : (
+                            <p style={styles.noDataText}>AQI data not available for this location.</p>
+                        )}
                     </div>
                 </div>
             </main>
@@ -165,7 +156,9 @@ const styles = {
     headerActions: { display: 'flex', gap: '1rem' },
     navButton: { padding: '0.75rem 1.5rem', fontSize: '1rem', fontWeight: '600', color: '#2d3748', backgroundColor: '#fff', border: '1px solid #cbd5e0', borderRadius: '6px', cursor: 'pointer' },
     authButton: { padding: '0.75rem 1.5rem', fontSize: '1rem', fontWeight: '600', color: '#fff', backgroundColor: '#2d3748', border: 'none', borderRadius: '6px', cursor: 'pointer' },
-    main: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2rem' },
+    main: { display: 'flex', flexDirection: 'column', gap: '2rem' },
+    subGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' },
+    noDataText: { textAlign: 'center', color: '#a0aec0', marginTop: '2rem' },
     card: { backgroundColor: '#fff', borderRadius: '8px', padding: '1.5rem', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)', display: 'flex', flexDirection: 'column' },
     cardTitle: { fontSize: '1.25rem', fontWeight: '600', marginBottom: '1rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' },
     weatherMain: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', marginBottom: '1.5rem' },

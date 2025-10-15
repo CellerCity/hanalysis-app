@@ -10,56 +10,68 @@ const MICROSERVICE_URL = 'http://127.0.0.1:8000';
 router.get('/full', protect, async (req, res) => {
     try {
         const user = req.user;
-        const location = user.currentLocation || user.location;
-        
-        const weatherApiKey = process.env.WEATHER_API_KEY;
-        const weatherUrl = `https://api.weatherapi.com/v1/current.json?key=${weatherApiKey}&q=${location}&aqi=yes`;
-        const weatherResponse = await axios.get(weatherUrl);
-        const weatherData = weatherResponse.data;
+        let location = user.currentLocation || user.location;
+        let structuredWeatherData = null;
+        let geoCode = null;
 
-        const structuredWeatherData = { 
-            location: weatherData.location,
-            weather: { temperature_celsius: weatherData.current.temp_c, humidity_percent: weatherData.current.humidity },
-            air_quality: weatherData.current.air_quality,
-        };
+        // --- THE FIX: This block robustly handles WeatherAPI failures ---
+        await axios.get(`https://api.weatherapi.com/v1/current.json?key=${process.env.WEATHER_API_KEY}&q=${location}&aqi=yes`)
+            .then(weatherResponse => {
+                // This runs ONLY on a successful response
+                const weatherData = weatherResponse.data;
+                structuredWeatherData = {
+                    location: weatherData.location,
+                    weather: { temperature_celsius: weatherData.current.temp_c, humidity_percent: weatherData.current.humidity, condition: weatherData.current.condition.text, wind_kph: weatherData.current.wind_kph, uv_index: weatherData.current.uv, rainfall_mm: weatherData.current.precip_mm },
+                    air_quality: weatherData.current.air_quality,
+                };
+                geoCode = weatherData.location.country === 'India' 
+                    ? `IN-${weatherData.location.region.replace(/\s+/g, '').substring(0, 2).toUpperCase()}` 
+                    : weatherData.location.country_iso2;
+            })
+            .catch(weatherError => {
+                // This runs ONLY on a failed response, preventing a crash
+                console.error(`!!! Weather API failed for location "${location}". Proceeding without environmental data.`);
+                console.error(`Weather API Error: ${weatherError.response?.data?.error?.message || weatherError.message}`);
+                structuredWeatherData = { location: { name: location, region: '' }, weather: {}, air_quality: {} };
+                geoCode = 'IN'; // Fallback to a generic geoCode
+            });
         
-        let trendsData;
-        const geoCode = weatherData.location.country === 'India' ? `IN-${weatherData.location.region.replace(/\s+/g, '').substring(0, 2).toUpperCase()}` : weatherData.location.country_iso2;
-        
-        const cache = await TrendsCache.findOne({ geo: geoCode });
-        const oneDay = 24 * 60 * 60 * 1000;
+        // --- The rest of the logic can now proceed safely ---
 
-        if (cache && (new Date() - cache.lastFetched) < oneDay) {
-            trendsData = cache.data;
-        } else {
-            console.log(`[CACHE MISS] Fetching new trends for ${geoCode}`);
-            try {
-                const standardKeywords = ['fever', 'cough', 'flu', 'dengue', 'malaria'];
-                const trendsResponse = await axios.get(`${MICROSERVICE_URL}/api/trends`, {
-                    params: { keywords: standardKeywords.join(','), geo: geoCode }
-                });
-                
-                // --- THE FIX: Only update the cache if the new data is valid and not empty ---
-                if (trendsResponse.data && Array.isArray(trendsResponse.data) && trendsResponse.data.length > 0) {
-                    console.log(`[CACHE UPDATE] Saving new trends data for ${geoCode}.`);
-                    trendsData = trendsResponse.data;
-                    await TrendsCache.findOneAndUpdate(
-                        { geo: geoCode },
-                        { data: trendsData, lastFetched: new Date() },
-                        { upsert: true, new: true }
-                    );
-                } else {
-                    // If the live response is empty, use the old, stale data if it exists.
-                    console.log("Received empty trends data, using stale cache if available.");
-                    trendsData = cache ? cache.data : [];
+        let trendsData = [];
+        if (geoCode) {
+            const trendsCache = await TrendsCache.findOne({ geo: geoCode });
+            const oneDay = 24 * 60 * 60 * 1000;
+            if (trendsCache && (new Date() - trendsCache.lastFetched) < oneDay) {
+                trendsData = trendsCache.data;
+            } else {
+                try {
+                    const standardKeywords = ['fever', 'cough', 'flu', 'dengue', 'malaria'];
+                    const trendsResponse = await axios.get(`${MICROSERVICE_URL}/api/trends`, { params: { keywords: standardKeywords.join(','), geo: geoCode } });
+                    if (trendsResponse.data && Array.isArray(trendsResponse.data) && trendsResponse.data.length > 0) {
+                        trendsData = trendsResponse.data;
+                        await TrendsCache.findOneAndUpdate({ geo: geoCode }, { data: trendsData, lastFetched: new Date() }, { upsert: true });
+                    } else {
+                        trendsData = trendsCache ? trendsCache.data : [];
+                    }
+                } catch (trendError) {
+                    trendsData = trendsCache ? trendsCache.data : [];
                 }
-            } catch (trendError) {
-                console.error("Failed to fetch new trends, using stale cache if available.", trendError.message);
-                // If the fetch fails completely, use the old data if we have it.
-                trendsData = cache ? cache.data : []; 
             }
         }
         
+        let baselineAnalysis;
+        const guestCache = await GuestAnalysisCache.findOne({ location: location });
+        const oneHour = 60 * 60 * 1000;
+        if (guestCache && (new Date() - guestCache.lastFetched) < oneHour) {
+            baselineAnalysis = guestCache.analysis;
+        } else {
+            const guestPayload = { userProfile: { age: 30, location: location, healthProfile: {}}, weather: structuredWeatherData, trends: trendsData };
+            const guestAnalysisResponse = await axios.post(`${MICROSERVICE_URL}/api/analyze`, guestPayload);
+            baselineAnalysis = guestAnalysisResponse.data;
+            await GuestAnalysisCache.findOneAndUpdate({ location: location }, { analysis: baselineAnalysis, lastFetched: new Date() }, { upsert: true });
+        }
+
         const safeUserProfile = {
             age: user.age,
             location: user.location,
@@ -68,11 +80,18 @@ router.get('/full', protect, async (req, res) => {
                 allergies: user.healthProfile?.allergies || []
             }
         };
-
-        const combinedData = { userProfile: safeUserProfile, weather: structuredWeatherData, trends: trendsData };
+        const combinedData = { 
+            baselineAnalysis: baselineAnalysis,
+            userProfile: safeUserProfile, 
+            weather: structuredWeatherData, 
+            trends: trendsData 
+        };
         const analysisResponse = await axios.post(`${MICROSERVICE_URL}/api/analyze`, combinedData);
         
-        res.json(analysisResponse.data);
+        res.json({
+            analysis: analysisResponse.data,
+            metrics: structuredWeatherData
+        });
 
     } catch (error) {
         console.error("Full analysis orchestration failed:", error.message);
@@ -81,3 +100,4 @@ router.get('/full', protect, async (req, res) => {
 });
 
 module.exports = router;
+
