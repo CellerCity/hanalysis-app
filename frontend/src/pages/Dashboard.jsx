@@ -1,12 +1,27 @@
-import React, {useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/api';
 
-// Helper Components
-const SunIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>;
+// Helper Components (no changes)
+const SunIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>;
 const WindIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"></path></svg>;
 const DropletIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path></svg>;
+
+const calculateGuestRiskScore = (metrics) => {
+    // ... function remains the same
+    let score = 0;
+    const recommendations = [];
+    const { weather, air_quality } = metrics;
+    if (weather.temperature_celsius > 35) { score += 3; recommendations.push("High temperature: Stay hydrated and avoid prolonged sun exposure."); }
+    if (weather.humidity_percent > 85) { score += 2; recommendations.push("High humidity: Air may feel heavy. Good for hydration but can affect breathing for some."); }
+    if (weather.uv_index > 6) { score += 3; recommendations.push("High UV Index: Use sunscreen and wear protective clothing."); }
+    if (air_quality.us_epa_index >= 3) { score += 4; recommendations.push("Poor Air Quality: Limit strenuous outdoor activities."); }
+    let level;
+    if (score <= 2) level = 'Low'; else if (score <= 5) level = 'Moderate'; else level = 'High';
+    if (recommendations.length === 0) recommendations.push("Environmental conditions seem favorable. Sign up for personalized advice!");
+    return { riskScore: score, riskLevel: level, recommendations, summary: "A general risk assessment based on local weather." };
+};
 
 const Dashboard = ({ onNavigate }) => {
     const { user, logout } = useAuth();
@@ -21,18 +36,14 @@ const Dashboard = ({ onNavigate }) => {
             setError('');
             try {
                 if (user) {
-                    // Logic for logged-in users
                     const analysisRes = await api.get('/analysis/full');
                     setRiskAssessment(analysisRes.data);
-                    
-                    // We still need the detailed weather data for the other cards
-                    const metricsRes = await axios.get(`http://localhost:5000/api/health-metrics?location=${user.currentLocation || user.location}`);
+                    const metricsRes = await axios.get(`http://localhost:5000/api/health-metrics?location=${user.location}`);
                     setMetrics(metricsRes.data);
                 } else {
-                    // Logic for guests, using the new intelligent endpoint
                     const { data } = await axios.get(`http://localhost:5000/api/health-metrics`);
-                    setMetrics(data); // The whole response is the metrics object
-                    setRiskAssessment(data.analysis); // The AI analysis is nested inside
+                    setMetrics(data);
+                    setRiskAssessment(data.analysis);
                 }
             } catch (err) {
                 console.error("Dashboard fetch error:", err);
@@ -51,7 +62,7 @@ const Dashboard = ({ onNavigate }) => {
 
     const { location, weather, air_quality } = metrics;
     const { riskScore, riskLevel, summary, recommendations } = riskAssessment;
-
+    
     const getAqiColor = (aqi) => (aqi <= 2 ? '#4caf50' : aqi <= 4 ? '#ff9800' : '#f44336');
     const getRiskColor = (level) => {
         switch (level) {
@@ -97,8 +108,20 @@ const Dashboard = ({ onNavigate }) => {
                      <p style={styles.summaryText}>{summary}</p>
                     <div style={styles.recommendations}>
                         <h3 style={styles.recommendationsTitle}>Recommendations:</h3>
+                        {/* --- THE FIX: Robustly render the recommendations list --- */}
                         <ul style={styles.recommendationsList}>
-                            {recommendations.map((rec, index) => <li key={index}>{rec}</li>)}
+                            {recommendations && recommendations.map((rec, index) => {
+                                // Check if 'rec' is a string or an object
+                                if (typeof rec === 'string') {
+                                    return <li key={index}>{rec}</li>;
+                                }
+                                // If it's an object, try to find a reasonable value to display
+                                if (typeof rec === 'object' && rec !== null) {
+                                    const recommendationText = rec.recommendation || rec.measure || rec.content || JSON.stringify(rec);
+                                    return <li key={index}>{recommendationText}</li>;
+                                }
+                                return null;
+                            })}
                         </ul>
                     </div>
                 </div>
