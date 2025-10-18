@@ -10,20 +10,37 @@ const profileRoutes = require('./routes/profileRoutes');
 const analysisRoutes = require('./routes/analysisRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const TrendsCache = require('./models/trendsCacheModel');
-const GuestAnalysisCache = require('./models/guestAnalysisCacheModel'); // Import our new model
+const GuestAnalysisCache = require('./models/guestAnalysisCacheModel');
 
 // Load environment variables and connect to DB
 dotenv.config();
 connectDB();
 
 const app = express();
-const MICROSERVICE_URL = 'http://127.0.0.1:8000';
+const MICROSERVICE_URL = process.env.MICROSERVICE_URL || 'http://127.0.0.1:8000';
 
-// Middleware
-app.use(cors());
+// --- THE FIX: Configure CORS for Production ---
+// We create a list of allowed origins.
+const allowedOrigins = [
+  'http://localhost:5173', // For local development
+  process.env.CORS_ORIGIN   // The production frontend URL from our environment variables
+];
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // If the incoming origin is in our list (or if there's no origin, e.g. a server-to-server request), allow it.
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  }
+};
+
+app.use(cors(corsOptions)); // Use the configured options
 app.use(express.json());
 
-// API Routes
+// API Routes (remain the same)
 app.use('/api/users', userRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/analysis', analysisRoutes);
@@ -35,12 +52,11 @@ app.get('/', (req, res) => {
 });
 
 
-// --- UPGRADED /api/health-metrics FOR GUEST MODE ---
+// UPGRADED /api/health-metrics FOR GUEST MODE
 app.get('/api/health-metrics', async (req, res) => {
     const location = req.query.location || 'Kharagpur';
 
     try {
-        // We also need the basic weather data for the cards, so we'll fetch it regardless
         const weatherApiKey = process.env.WEATHER_API_KEY;
         const weatherUrl = `https://api.weatherapi.com/v1/current.json?key=${weatherApiKey}&q=${location}&aqi=yes`;
         const weatherResponse = await axios.get(weatherUrl);
@@ -51,45 +67,37 @@ app.get('/api/health-metrics', async (req, res) => {
             air_quality: weatherData.current.air_quality,
         };
 
-        // 1. --- Check for a fresh AI analysis cache for the location ---
         const cache = await GuestAnalysisCache.findOne({ location: location });
-        const oneHour = 60 * 60 * 1000; // Cache for 1 hour
+        const oneHour = 60 * 60 * 1000;
 
         if (cache && (new Date() - cache.lastFetched) < oneHour) {
-            // 2. If fresh cache exists, return it along with live weather
             console.log(`[GUEST CACHE HIT] Using cached AI analysis for ${location}`);
             return res.json({ ...structuredWeatherData, analysis: cache.analysis });
         }
 
-        // 3. --- If cache is old or missing, generate a new analysis ---
         console.log(`[GUEST CACHE MISS] Generating new AI analysis for ${location}`);
         
-        // Fetch cached trends data
         const geoCode = weatherData.location.country === 'India' 
             ? `IN-${weatherData.location.region.replace(/\s+/g, '').substring(0, 2).toUpperCase()}` 
             : weatherData.location.country_iso2;
         const trendsCache = await TrendsCache.findOne({ geo: geoCode });
         const trendsData = trendsCache ? trendsCache.data : [];
 
-        // Prepare a generic payload for the AI
         const combinedData = {
-            userProfile: { age: 30, location: location, healthProfile: { preExistingConditions: [], allergies: [] } }, // Generic user
+            userProfile: { age: 30, location: location, healthProfile: { preExistingConditions: [], allergies: [] } },
             weather: structuredWeatherData,
             trends: trendsData
         };
 
-        // Call the Flask microservice
         const analysisResponse = await axios.post(`${MICROSERVICE_URL}/api/analyze`, combinedData);
         const newAnalysis = analysisResponse.data;
 
-        // 4. Save the new analysis to the guest cache
         await GuestAnalysisCache.findOneAndUpdate(
             { location: location },
             { analysis: newAnalysis, lastFetched: new Date() },
             { upsert: true, new: true }
         );
 
-        // 5. Return the new analysis along with live weather
         res.json({ ...structuredWeatherData, analysis: newAnalysis });
 
     } catch (error) {
