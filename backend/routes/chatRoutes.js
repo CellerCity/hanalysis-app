@@ -4,7 +4,7 @@ const axios = require('axios');
 const { protect } = require('../middleware/authMiddleware');
 
 // The base URL for our Flask microservice
-const MICROSERVICE_URL = 'http://127.0.0.1:8000';
+const MICROSERVICE_URL = process.env.MICROSERVICE_URL || 'http://127.0.0.1:8000';
 
 // @route   POST /api/chat
 // @desc    Handle a user's chat message
