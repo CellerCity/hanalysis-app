@@ -5,7 +5,7 @@ const { protect } = require('../middleware/authMiddleware');
 const TrendsCache = require('../models/trendsCacheModel');
 const GuestAnalysisCache = require('../models/guestAnalysisCacheModel');
 
-const MICROSERVICE_URL = 'http://127.0.0.1:8000';
+const MICROSERVICE_URL = process.env.MICROSERVICE_URL || 'http://127.0.0.1:8000';
 
 router.get('/full', protect, async (req, res) => {
     try {

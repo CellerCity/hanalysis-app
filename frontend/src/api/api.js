@@ -1,13 +1,18 @@
 import axios from 'axios';
 
+// --- THE FIX: Use an environment variable for the base URL ---
+// When we run `npm run dev`, Vite leaves this blank, so it falls back to localhost.
+// When we deploy, Vite will use the VITE_API_URL we set on Render.
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
 const api = axios.create({
-    baseURL: 'http://localhost:5000/api',
+    baseURL: API_URL,
     headers: {
         'Content-Type': 'application/json',
     },
 });
 
-// Request Interceptor: Attaches the token to every outgoing request
+// Request Interceptor (remains the same)
 api.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('token');
@@ -19,29 +24,17 @@ api.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
-
-// --- THE FIX: Add a Response Interceptor to handle expired tokens ---
-// This function will run on every response coming FROM the backend
+// Response Interceptor (remains the same)
 api.interceptors.response.use(
-    (response) => {
-        // If the response is successful, just return it
-        return response;
-    },
+    (response) => response,
     (error) => {
-        // Check if the error is a 401 Unauthorized error
         if (error.response && error.response.status === 401) {
-            console.log("Session expired or invalid. Logging out.");
-            // Remove the invalid token
             localStorage.removeItem('token');
-            // Force a reload of the page. Our AuthContext will then
-            // see that there is no token and show the login screen.
             window.location.reload(); 
         }
-        // For all other errors, just pass them along
         return Promise.reject(error);
     }
 );
-
 
 export default api;
 
