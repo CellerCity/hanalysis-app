@@ -3,7 +3,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/api';
 
-// Helper Components (no changes)
+// Helper Components
 const SunIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>;
 const WindIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"></path></svg>;
 const DropletIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path></svg>;
@@ -21,13 +21,11 @@ const Dashboard = ({ onNavigate }) => {
             setError('');
             try {
                 if (user) {
-                    // --- THE FIX: Make a single, robust API call for logged-in users ---
                     const { data } = await api.get('/analysis/full');
                     setRiskAssessment(data.analysis);
                     setMetrics(data.metrics);
                 } else {
-                    // Logic for guests remains the same
-                    const { data } = await axios.get(`http://localhost:5000/api/health-metrics`);
+                    const { data } = await api.get('/health-metrics');
                     setMetrics(data);
                     setRiskAssessment(data.analysis);
                 }
@@ -47,13 +45,10 @@ const Dashboard = ({ onNavigate }) => {
     if (!metrics?.location || !riskAssessment?.recommendations) {
          return <div style={styles.centerMessage}>Could not load complete data for your location. Please try again later.</div>;
     }
-    
-    // --- Graceful data handling ---
-    const location = metrics.location || {};
-    const weather = metrics.weather || {};
-    const air_quality = metrics.air_quality || {};
+
+    const { location, weather, air_quality } = metrics;
     const { riskScore, riskLevel, summary, recommendations } = riskAssessment;
-    
+
     const getAqiColor = (aqi) => (!aqi || aqi <= 2 ? '#4caf50' : aqi <= 4 ? '#ff9800' : '#f44336');
     const getRiskColor = (level) => {
         switch (level) {
@@ -63,6 +58,18 @@ const Dashboard = ({ onNavigate }) => {
             case 'Very High': return '#f44336';
             default: return '#718096';
         }
+    };
+    
+    // Robustly render recommendations
+    const renderRecommendation = (rec, index) => {
+        if (typeof rec === 'string') {
+            return <li key={index}>{rec}</li>;
+        }
+        if (typeof rec === 'object' && rec !== null) {
+            const recommendationText = rec.recommendation || rec.detail || rec.measure || rec.content || JSON.stringify(rec);
+            return <li key={index}>{recommendationText}</li>;
+        }
+        return null;
     };
 
     return (
@@ -88,23 +95,23 @@ const Dashboard = ({ onNavigate }) => {
                 </div>
             </header>
             <main style={styles.main}>
-                <div style={styles.subGrid}>
-                    <div style={{ ...styles.card, ...styles.riskCard, borderColor: getRiskColor(riskLevel), gridColumn: '1 / -1' }}>
-                        <h2 style={styles.cardTitle}>Overall Health Risk</h2>
-                        {riskScore && <div style={styles.riskDisplay}>
-                            <div style={{...styles.riskScoreCircle, backgroundColor: getRiskColor(riskLevel)}}>
-                                <span style={styles.riskScoreText}>{riskScore}</span>
-                            </div>
-                            <span style={{...styles.riskLevel, color: getRiskColor(riskLevel)}}>{riskLevel}</span>
-                        </div>}
-                        <p style={styles.summaryText}>{summary}</p>
-                        <div style={styles.recommendations}>
-                            <h3 style={styles.recommendationsTitle}>Recommendations:</h3>
-                            <ul style={styles.recommendationsList}>
-                                {recommendations.map((rec, index) => <li key={index}>{rec}</li>)}
-                            </ul>
+                <div style={{ ...styles.card, ...styles.riskCard, borderColor: getRiskColor(riskLevel), gridColumn: '1 / -1' }}>
+                    <h2 style={styles.cardTitle}>Overall Health Risk</h2>
+                    {riskScore && <div style={styles.riskDisplay}>
+                        <div style={{...styles.riskScoreCircle, backgroundColor: getRiskColor(riskLevel)}}>
+                            <span style={styles.riskScoreText}>{riskScore}</span>
                         </div>
+                        <span style={{...styles.riskLevel, color: getRiskColor(riskLevel)}}>{riskLevel}</span>
+                    </div>}
+                     <p style={styles.summaryText}>{summary}</p>
+                    <div style={styles.recommendations}>
+                        <h3 style={styles.recommendationsTitle}>Recommendations:</h3>
+                        <ul style={styles.recommendationsList}>
+                            {recommendations.map(renderRecommendation)}
+                        </ul>
                     </div>
+                </div>
+                <div style={styles.subGrid}>
                     <div style={styles.card}>
                         <h2 style={styles.cardTitle}>Current Weather</h2>
                         {weather?.temperature_celsius ? (
