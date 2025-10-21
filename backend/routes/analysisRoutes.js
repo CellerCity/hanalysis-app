@@ -14,10 +14,8 @@ router.get('/full', protect, async (req, res) => {
         let structuredWeatherData = null;
         let geoCode = null;
 
-        // --- THE FIX: This block robustly handles WeatherAPI failures ---
         await axios.get(`https://api.weatherapi.com/v1/current.json?key=${process.env.WEATHER_API_KEY}&q=${location}&aqi=yes`)
             .then(weatherResponse => {
-                // This runs ONLY on a successful response
                 const weatherData = weatherResponse.data;
                 structuredWeatherData = {
                     location: weatherData.location,
@@ -29,32 +27,36 @@ router.get('/full', protect, async (req, res) => {
                     : weatherData.location.country_iso2;
             })
             .catch(weatherError => {
-                // This runs ONLY on a failed response, preventing a crash
-                console.error(`!!! Weather API failed for location "${location}". Proceeding without environmental data.`);
-                console.error(`Weather API Error: ${weatherError.response?.data?.error?.message || weatherError.message}`);
+                console.error(`!!! Weather API failed for location "${location}".`);
                 structuredWeatherData = { location: { name: location, region: '' }, weather: {}, air_quality: {} };
-                geoCode = 'IN'; // Fallback to a generic geoCode
+                geoCode = 'IN';
             });
         
-        // --- The rest of the logic can now proceed safely ---
-
         let trendsData = [];
         if (geoCode) {
             const trendsCache = await TrendsCache.findOne({ geo: geoCode });
             const oneDay = 24 * 60 * 60 * 1000;
             if (trendsCache && (new Date() - trendsCache.lastFetched) < oneDay) {
+                console.log(`[TRENDS DEBUG] CACHE HIT: Using fresh trends data for ${geoCode}.`);
                 trendsData = trendsCache.data;
             } else {
+                console.log(`[TRENDS DEBUG] CACHE MISS: Cache is old or missing for ${geoCode}. Attempting to fetch new data.`);
                 try {
                     const standardKeywords = ['fever', 'cough', 'flu', 'dengue', 'malaria'];
+                    
+                    console.log(`[TRENDS DEBUG] Calling microservice for trends with keywords: ${standardKeywords.join(', ')}`);
                     const trendsResponse = await axios.get(`${MICROSERVICE_URL}/api/trends`, { params: { keywords: standardKeywords.join(','), geo: geoCode } });
+
                     if (trendsResponse.data && Array.isArray(trendsResponse.data) && trendsResponse.data.length > 0) {
+                        console.log(`[TRENDS DEBUG] SUCCESS: Fetched new data. Updating cache for ${geoCode}.`);
                         trendsData = trendsResponse.data;
                         await TrendsCache.findOneAndUpdate({ geo: geoCode }, { data: trendsData, lastFetched: new Date() }, { upsert: true });
                     } else {
+                        console.log("[TRENDS DEBUG] WARNING: Live fetch returned empty data. Using stale cache if available.");
                         trendsData = trendsCache ? trendsCache.data : [];
                     }
                 } catch (trendError) {
+                    console.error("[TRENDS DEBUG] ERROR: Live fetch failed. Using stale cache if available.", trendError.message);
                     trendsData = trendsCache ? trendsCache.data : [];
                 }
             }
@@ -62,6 +64,7 @@ router.get('/full', protect, async (req, res) => {
         
         let baselineAnalysis;
         const guestCache = await GuestAnalysisCache.findOne({ location: location });
+        // ... (rest of the file is unchanged) ...
         const oneHour = 60 * 60 * 1000;
         if (guestCache && (new Date() - guestCache.lastFetched) < oneHour) {
             baselineAnalysis = guestCache.analysis;
@@ -80,12 +83,7 @@ router.get('/full', protect, async (req, res) => {
                 allergies: user.healthProfile?.allergies || []
             }
         };
-        const combinedData = { 
-            baselineAnalysis: baselineAnalysis,
-            userProfile: safeUserProfile, 
-            weather: structuredWeatherData, 
-            trends: trendsData 
-        };
+        const combinedData = { baselineAnalysis: baselineAnalysis, userProfile: safeUserProfile, weather: structuredWeatherData, trends: trendsData };
         const analysisResponse = await axios.post(`${MICROSERVICE_URL}/api/analyze`, combinedData);
         
         res.json({
