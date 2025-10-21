@@ -32,7 +32,7 @@ CORS(app)
 
 # --- Helper function for the Enhanced LLM Prompt ---
 def create_analysis_prompt(data):
-    """Formats the combined data into a detailed prompt for the LLM, including risk score and location context."""
+    """Formats the combined data into a detailed prompt for the LLM with clearer instructions for trends."""
     user_profile = data.get('userProfile', {})
     weather = data.get('weather', {})
     air_quality = weather.get('air_quality', {})
@@ -46,18 +46,17 @@ def create_analysis_prompt(data):
     if baseline_analysis:
         baseline_prompt_part = f"""You have already determined that the baseline risk for a generic healthy person in this environment is {baseline_analysis.get('riskScore')}/10 ({baseline_analysis.get('riskLevel')}), with the summary: '{baseline_analysis.get('summary')}'. """
 
-    trends_summary = "No significant trend data."
+    trends_summary = "No significant trend data available."
     if trends_data and isinstance(trends_data, list) and trends_data:
         latest = trends_data[-1]
-        points = [f"'{k}' interest: {v}/100" for k, v in latest.items() if k != 'date']
+        points = [f"'{k}': {v}" for k, v in latest.items() if k != 'date']
         if points: trends_summary = ", ".join(points) + "."
 
-    # --- THE FIX: The prompt is now much stricter about the recommendations format ---
     prompt = f"""
     You are HANALYSIS, a health risk analyst. Your response MUST be a clean JSON object with four keys: "riskScore" (integer 1-10), "riskLevel", "summary", and "recommendations".
-    The "recommendations" value MUST be an array of simple, human-readable strings. Each string in the array should be a single, complete recommendation. Do not use complex objects within the recommendations array.
+    The "recommendations" value MUST be an array of simple, human-readable strings.
     
-    TASK: First, consider the baseline environmental risk. Then, adjust the risk score and recommendations based on the specific user's profile. Explain your reasoning in the summary.
+    TASK: First, consider the baseline environmental risk. Then, adjust the risk score and recommendations based on the specific user's profile and local search trends.
 
     **1. Environmental Baseline:**
     {baseline_prompt_part}
@@ -73,8 +72,9 @@ def create_analysis_prompt(data):
     - Temperature: {weather.get('weather', {}).get('temperature_celsius', 'N/A')}°C
     - AQI: {air_quality.get('us_epa_index', 'N/A')}
     
-    **4. Local Search Trends:**
-    - {trends_summary}
+    **4. Local Search Interest Trends:**
+    - The following values represent normalized search interest for various terms. A high value (e.g., >75) indicates a significant spike in public curiosity about that topic compared to its usual search volume. Use this as a signal of potential community concern or early-stage outbreaks, not as a direct risk metric.
+    - Trends: {trends_summary}
 
     Now, generate the final, adjusted JSON analysis for this specific user.
     """
