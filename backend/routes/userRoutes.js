@@ -9,35 +9,36 @@ const axios = require('axios');
 const generateToken = (user) => {
     const locationForToken = user.currentLocation || user.location;
     return jwt.sign(
-        { 
-            id: user._id,
-            name: user.name,
-            email: user.email,
-            location: locationForToken 
-        },
+        { id: user._id, name: user.name, email: user.email, location: locationForToken },
         process.env.JWT_SECRET,
         { expiresIn: '30d' }
     );
 };
 
-// --- NEW: A single, robust helper function for location detection ---
+// --- A single, robust helper function for location detection ---
 const updateUserLocation = async (req, user) => {
     const ip = req.ip || req.connection.remoteAddress;
-    // Start with the last known good location as a default
     let determinedLocation = user.currentLocation || user.location; 
-
-    try {
-        const geoResponse = await axios.get(`http://ip-api.com/json/${ip}`);
-        if (geoResponse.data && geoResponse.data.status === 'success' && geoResponse.data.city) {
-            const detectedCity = geoResponse.data.city;
-            console.log(`[LOCATION] IP Geolocation success. Detected location: ${detectedCity}`);
-            determinedLocation = detectedCity;
-        } else {
-            console.log(`[LOCATION] IP Geolocation failed. Using fallback.`);
+    
+    // --- THE FIX: Use the new, more reliable ipgeolocation.io API ---
+    const apiKey = process.env.IPGEOLOCATION_API_KEY;
+    if (apiKey) {
+        try {
+            const geoResponse = await axios.get(`https://api.ipgeolocation.io/ipgeo?apiKey=${apiKey}&ip=${ip}`);
+            if (geoResponse.data && geoResponse.data.city) {
+                const detectedCity = geoResponse.data.city;
+                console.log(`[LOCATION] IP Geolocation success. Detected location: ${detectedCity}`);
+                determinedLocation = detectedCity;
+            } else {
+                console.log(`[LOCATION] IP Geolocation failed. Using fallback.`);
+                determinedLocation = process.env.DEV_DEFAULT_LOCATION || determinedLocation;
+            }
+        } catch (geoError) {
+            console.error(`[LOCATION] IP Geolocation error. Using fallback.`, geoError.message);
             determinedLocation = process.env.DEV_DEFAULT_LOCATION || determinedLocation;
         }
-    } catch (geoError) {
-        console.error(`[LOCATION] IP Geolocation error. Using fallback.`, geoError.message);
+    } else {
+        console.error("[LOCATION] IPGEOLOCATION_API_KEY not found. Using fallback.");
         determinedLocation = process.env.DEV_DEFAULT_LOCATION || determinedLocation;
     }
 
@@ -45,21 +46,16 @@ const updateUserLocation = async (req, user) => {
     if (user.currentLocation !== determinedLocation) {
         user.currentLocation = determinedLocation;
     }
-    // Add to history if it's a new, unique location
     if (!user.locationHistory.includes(determinedLocation)) {
         user.locationHistory.push(determinedLocation);
     }
     
-    // Save the changes to the user object in the database
     await user.save();
-    
-    // Return the final, reliable location
     return determinedLocation;
 };
 
 
 // @route   POST /api/users/register
-// @desc    Register a new user, now using the unified location logic
 router.post('/register', async (req, res) => {
     const { name, email, password, age, location, preExistingConditions, allergies } = req.body;
 
@@ -72,11 +68,10 @@ router.post('/register', async (req, res) => {
         const conditionsArray = preExistingConditions ? preExistingConditions.split(',').map(s => s.trim()).filter(Boolean) : [];
         const allergiesArray = allergies ? allergies.split(',').map(s => s.trim()).filter(Boolean) : [];
 
-        // Create the user first with the location they entered
         user = new User({
             name, email, password, age,
-            location, // Home location
-            currentLocation: location, // Temporary current location
+            location,
+            currentLocation: location,
             locationHistory: [location],
             healthProfile: {
                 preExistingConditions: conditionsArray,
@@ -88,7 +83,6 @@ router.post('/register', async (req, res) => {
         user.password = await bcrypt.hash(password, salt);
         await user.save();
         
-        // --- THE FIX: Now, call the unified helper to get the REAL current location ---
         const finalCurrentLocation = await updateUserLocation(req, user);
         
         console.log('New user created and location verified:', user.email);
@@ -97,8 +91,8 @@ router.post('/register', async (req, res) => {
             _id: user.id,
             name: user.name,
             email: user.email,
-            location: finalCurrentLocation, // Send the reliable location
-            token: generateToken(user), // The user object is already updated and saved
+            location: finalCurrentLocation,
+            token: generateToken(user),
         });
     } catch (error) {
         console.error('Registration error:', error.message);
@@ -107,7 +101,6 @@ router.post('/register', async (req, res) => {
 });
 
 // @route   POST /api/users/login
-// @desc    Authenticate user, using the unified location logic
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
     try {
@@ -116,15 +109,14 @@ router.post('/login', async (req, res) => {
             return res.status(400).json({ message: 'Invalid credentials' });
         }
         
-        // --- THE FIX: Call the unified helper function ---
         const finalCurrentLocation = await updateUserLocation(req, user);
 
         res.json({
             _id: user.id,
             name: user.name,
             email: user.email,
-            location: finalCurrentLocation, // Send the reliable location
-            token: generateToken(user), // The user object is already updated and saved
+            location: finalCurrentLocation,
+            token: generateToken(user),
         });
     } catch (error) {
         console.error('Login error:', error.message);
