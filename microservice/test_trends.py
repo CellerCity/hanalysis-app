@@ -50,5 +50,7 @@ if __name__ == '__main__':
     # --- CONFIGURE YOUR TEST HERE ---
     target_keywords = ['fever', 'cough', 'flu', 'dengue']
     target_geo = 'IN-WE'  # West Bengal. Change to 'IN-DL' for Delhi, etc.
+
+    # when no data is present this returns 400 bad request [best is to use the IN for the entire country]
     
     fetch_and_print_trends(target_keywords, target_geo)
