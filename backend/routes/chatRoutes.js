@@ -31,7 +31,13 @@ router.post('/', protect, async (req, res) => {
                 temperature_celsius: weatherData.current.temp_c,
                 humidity_percent: weatherData.current.humidity,
             },
-            air_quality: weatherData.current.air_quality,
+            air_quality: {
+                us_epa_index: weatherData.current.air_quality['us-epa-index'], // <-- The fix
+                pm2_5: weatherData.current.air_quality.pm2_5,
+                pm10: weatherData.current.air_quality.pm10,
+                o3: weatherData.current.air_quality.o3,
+                no2: weatherData.current.air_quality.no2
+            }
         };
 
         // --- THE FIX: Defensively build the userProfile object ---

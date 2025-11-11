@@ -64,7 +64,13 @@ app.get('/api/health-metrics', async (req, res) => {
         const structuredWeatherData = {
             location: { name: weatherData.location.name, region: weatherData.location.region, country: weatherData.location.country, localtime: weatherData.location.localtime },
             weather: { temperature_celsius: weatherData.current.temp_c, condition: weatherData.current.condition.text, humidity_percent: weatherData.current.humidity, wind_kph: weatherData.current.wind_kph, uv_index: weatherData.current.uv, rainfall_mm: weatherData.current.precip_mm },
-            air_quality: weatherData.current.air_quality,
+            air_quality: {
+                us_epa_index: weatherData.current.air_quality['us-epa-index'], // <-- The fix
+                pm2_5: weatherData.current.air_quality.pm2_5,
+                pm10: weatherData.current.air_quality.pm10,
+                o3: weatherData.current.air_quality.o3,
+                no2: weatherData.current.air_quality.no2
+            }
         };
 
         const cache = await GuestAnalysisCache.findOne({ location: location });
