@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import api from '../api/api'; // Use our centralized API client
+import api from '../api/api';
+import WeatherCard from '../components/WeatherCard';
 
 const Signup = ({ onNavigate }) => {
     const { handleAuthentication } = useAuth();
@@ -39,8 +40,28 @@ const Signup = ({ onNavigate }) => {
     };
 
     return (
-        <div style={styles.container}>
-            <div style={styles.formCard}>
+        <>
+            <WeatherCard />
+            <div style={styles.container}>
+                <div style={styles.header}>
+                    <button 
+                        onClick={() => onNavigate('dashboard')} 
+                        style={styles.dashboardButton}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.3)';
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.2)';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+                        }}
+                    >
+                        Go to Dashboard
+                    </button>
+                </div>
+                <div style={styles.formCard}>
                 <h1 style={styles.title}>Create Your Account</h1>
                 <form onSubmit={onSubmit}>
                     {error && <p style={styles.errorMessage}>{error}</p>}
@@ -60,17 +81,20 @@ const Signup = ({ onNavigate }) => {
                 </p>
             </div>
         </div>
+        </>
     );
 };
 
 // --- STYLES ---
 const styles = {
-    container: { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#f0f2f5' },
-    formCard: { backgroundColor: '#fff', padding: '2.5rem', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', width: '100%', maxWidth: '450px' },
-    title: { textAlign: 'center', fontSize: '1.75rem', fontWeight: '600', color: '#1a202c', marginBottom: '1.5rem' },
+    container: { display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: '2rem', position: 'relative' },
+    header: { position: 'absolute', top: '2rem', left: '2rem', zIndex: 10 },
+    dashboardButton: { padding: '0.75rem 1.5rem', fontSize: '0.95rem', fontWeight: '600', color: '#fff', backgroundColor: 'rgba(255, 255, 255, 0.2)', border: '2px solid rgba(255, 255, 255, 0.3)', borderRadius: '10px', cursor: 'pointer', transition: 'all 0.3s ease', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)', backdropFilter: 'blur(10px)' },
+    formCard: { backgroundColor: 'rgba(255, 255, 255, 0.95)', padding: '2.5rem', borderRadius: '20px', boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)', width: '100%', maxWidth: '450px', backdropFilter: 'blur(10px)', border: '1px solid rgba(255, 255, 255, 0.3)' },
+    title: { textAlign: 'center', fontSize: '2rem', fontWeight: '700', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: '1.5rem' },
     formGroup: { marginBottom: '1rem' },
     input: { width: '100%', padding: '0.75rem 1rem', border: '1px solid #cbd5e0', borderRadius: '6px', fontSize: '1rem' },
-    button: { width: '100%', padding: '0.75rem', border: 'none', borderRadius: '6px', backgroundColor: '#2d3748', color: '#fff', fontSize: '1rem', fontWeight: '600', cursor: 'pointer' },
+    button: { width: '100%', padding: '0.875rem', border: 'none', borderRadius: '10px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: '#fff', fontSize: '1rem', fontWeight: '600', cursor: 'pointer', boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)', transition: 'all 0.3s ease' },
     subText: { textAlign: 'center', marginTop: '1rem', color: '#718096' },
     link: { color: '#2b6cb0', fontWeight: '500', cursor: 'pointer' },
     errorMessage: { color: '#e53e3e', backgroundColor: '#fed7d7', padding: '0.75rem', borderRadius: '6px', textAlign: 'center', marginBottom: '1rem' },

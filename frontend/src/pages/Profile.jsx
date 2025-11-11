@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import api from '../api/api'; // Import our new centralized api client
+import api from '../api/api';
 import { useAuth } from '../context/AuthContext.jsx';
+import WeatherCard from '../components/WeatherCard';
 
 const Profile = ({ onNavigate }) => {
     // We still use useAuth for user details, but not for the token directly in the API call
@@ -67,7 +68,9 @@ const Profile = ({ onNavigate }) => {
     if (error) return <div style={{ ...styles.centerMessage, color: '#ff4d4d' }}>{error}</div>;
 
     return (
-        <div style={styles.container}>
+        <>
+            <WeatherCard />
+            <div style={styles.container}>
             <header style={styles.header}>
                 <h1 style={styles.title}>My Profile</h1>
                 <button onClick={() => onNavigate('dashboard')} style={styles.navButton}>
@@ -116,23 +119,24 @@ const Profile = ({ onNavigate }) => {
                 </form>
             </div>
         </div>
+        </>
     );
 };
 
 // --- STYLES ---
 const styles = {
-    container: { fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif', backgroundColor: '#f0f2f5', minHeight: '100vh', padding: '2rem', color: '#333' },
-    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' },
-    title: { fontSize: '2rem', fontWeight: '600', color: '#1a202c', margin: 0 },
-    navButton: { padding: '0.5rem 1rem', fontSize: '0.9rem', color: '#2d3748', backgroundColor: 'transparent', border: '1px solid #cbd5e0', borderRadius: '6px', cursor: 'pointer' },
-    card: { backgroundColor: '#fff', borderRadius: '8px', padding: '1.5rem', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)', marginBottom: '2rem' },
+    container: { fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', minHeight: '100vh', padding: '2rem', color: '#333' },
+    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', backgroundColor: 'rgba(255, 255, 255, 0.95)', padding: '1.5rem 2rem', borderRadius: '16px', boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)', backdropFilter: 'blur(10px)' },
+    title: { fontSize: '2rem', fontWeight: '700', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', margin: 0 },
+    navButton: { padding: '0.75rem 1.5rem', fontSize: '0.95rem', fontWeight: '600', color: '#475569', backgroundColor: '#fff', border: '2px solid #e2e8f0', borderRadius: '10px', cursor: 'pointer', transition: 'all 0.3s ease', boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)' },
+    card: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: '20px', padding: '2rem', boxShadow: '0 10px 40px rgba(0, 0, 0, 0.1)', marginBottom: '2rem', backdropFilter: 'blur(10px)', border: '1px solid rgba(255, 255, 255, 0.3)' },
     cardTitle: { fontSize: '1.25rem', fontWeight: '600', marginBottom: '1rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' },
     infoGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' },
     instructions: { color: '#718096', fontSize: '0.9rem', marginBottom: '1rem' },
     formGroup: { marginBottom: '1rem' },
     label: { display: 'block', fontWeight: '500', marginBottom: '0.5rem' },
     input: { width: '100%', padding: '0.75rem', border: '1px solid #cbd5e0', borderRadius: '6px', fontSize: '1rem' },
-    saveButton: { padding: '0.75rem 1.5rem', fontSize: '1rem', fontWeight: '600', color: '#fff', backgroundColor: '#2d3748', border: 'none', borderRadius: '6px', cursor: 'pointer' },
+    saveButton: { padding: '0.75rem 1.5rem', fontSize: '1rem', fontWeight: '600', color: '#fff', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', borderRadius: '10px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)', transition: 'all 0.3s ease' },
     centerMessage: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', fontSize: '1.5rem', fontFamily: 'sans-serif' },
     successMessage: { color: '#2f855a', marginTop: '1rem', textAlign: 'center' }
 };
