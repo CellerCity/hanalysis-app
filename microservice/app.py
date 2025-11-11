@@ -7,6 +7,7 @@ import pandas as pd
 import google.generativeai as genai
 import json
 from pymongo import MongoClient, TEXT # Import pymongo
+from sentence_transformers import SentenceTransformer
 
 # ... (MongoDB and Gemini Configuration remain the same) ...
 load_dotenv()
@@ -29,6 +30,12 @@ try:
     model_name = os.getenv('LLM_MODEL_NAME', 'models/gemini-pro')
     print(f"--- Using Gemini Model: {model_name} ---")
     model = genai.GenerativeModel(model_name)
+
+    # Load the model that matches the one you used to create your DB embeddings
+    print("--- Loading Sentence Transformer model... ---")
+    embedding_model = SentenceTransformer('all-MiniLM-L6-v2') 
+    print("--- Sentence Transformer model loaded. ---")
+
 except Exception as e:
     print(f"FATAL ERROR: Failed to configure Google AI. {e}")
     model = None
@@ -203,31 +210,54 @@ def handle_chat():
         
         user_question = data['history'][-1]['content']
         
+        # --- THIS IS THE NEW RAG LOGIC ---
+        
         retrieved_context = None
+        MINIMUM_SCORE_THRESHOLD = 0.75 # <-- TUNE THIS SCORE (0.0 to 1.0)
+        
         try:
-            # First, try to find a perfect match on the 'topic' field
-            # This is great for one-word queries like "Dengue"
-            # We use a case-insensitive regex for flexibility
-            search_result = health_facts_collection.find_one(
-                { "topic": { "$regex": f"^{user_question}$", "$options": "i" } }
-            )
+            # 1. Create a vector for the user's question
+            query_vector = embedding_model.encode(user_question).tolist()
             
-            if not search_result:
-                # If no topic match, fallback to our full-text search on chunk_text
-                search_result = health_facts_collection.find_one(
-                    { "$text": { "$search": user_question } }
-                )
-
-            # --- THE FIX: Remove the strict score check ---
-            # If the database found any result, we'll use it.
-            if search_result:
-                retrieved_context = search_result
-                print(f"[RAG DEBUG] Found relevant context: {retrieved_context.get('topic')}")
+            # 2. Define the Vector Search pipeline
+            pipeline = [
+                {
+                    "$vectorSearch": {
+                        "index": "search_buddy",     # <-- UPDATE THIS: Your vector index name
+                        "path": "chunk_embedding",        # <-- UPDATE THIS: Your embedding field name
+                        "queryVector": query_vector,
+                        "numCandidates": 100,             # Number to check
+                        "limit": 1                        # Get the single best match
+                    }
+                },
+                {
+                    "$addFields": {
+                        "similarity_score": { "$meta": "vectorSearchScore" }
+                    }
+                }
+            ]
+            
+            # 3. Execute the search
+            search_results = list(health_facts_collection.aggregate(pipeline))
+            
+            # 4. Apply the score threshold (THE "SCORING" FIX)
+            if search_results and search_results[0]['similarity_score'] > MINIMUM_SCORE_THRESHOLD:
+                retrieved_context = search_results[0]
+                print(f"[RAG DEBUG] Found relevant context: {retrieved_context.get('topic')} (Score: {retrieved_context['similarity_score']})")
             else:
-                print("[RAG DEBUG] No specific context found. Using general knowledge.")
+                if search_results:
+                    # Match found, but it was BELOW the threshold
+                    print(f"[RAG DEBUG] Match found but score too low: {search_results[0].get('topic')} (Score: {search_results[0]['similarity_score']})")
+                else:
+                    # No match found at all
+                    print("[RAG DEBUG] No vector match found.")
+                    
         except Exception as db_e:
             print(f"Error during context retrieval: {db_e}")
         
+        # --- END OF NEW RAG LOGIC ---
+        
+
         messages = create_chat_message_list(data, retrieved_context)
         response = model.generate_content(messages)
         
