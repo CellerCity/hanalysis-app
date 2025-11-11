@@ -58,9 +58,27 @@ app.get('/api/health-metrics', async (req, res) => {
 
     try {
         const weatherApiKey = process.env.WEATHER_API_KEY;
-        const weatherUrl = `https://api.weatherapi.com/v1/current.json?key=${weatherApiKey}&q=${location}&aqi=yes`;
-        const weatherResponse = await axios.get(weatherUrl);
-        const weatherData = weatherResponse.data;
+        
+        // 1. Change the URL to 'forecast.json' and add a 'days' parameter
+        const forecastUrl = `https://api.weatherapi.com/v1/forecast.json?key=${weatherApiKey}&q=${location}&days=3&aqi=yes`;
+
+        // Naming this 'apiResponse' for clarity
+        const apiResponse = await axios.get(forecastUrl); 
+        const weatherData = apiResponse.data;
+
+        // 2. Map the new forecast data to a clean array
+        const forecastData = weatherData.forecast.forecastday.map(day => ({
+            date: day.date,
+            maxtemp_c: day.day.maxtemp_c,
+            mintemp_c: day.day.mintemp_c,
+            condition: day.day.condition.text,
+            icon: day.day.condition.icon,
+
+            daily_chance_of_rain: day.day.daily_chance_of_rain,
+            uv: day.day.uv,
+            maxwind_kph: day.day.maxwind_kph
+        }));
+
         const structuredWeatherData = {
             location: { name: weatherData.location.name, region: weatherData.location.region, country: weatherData.location.country, localtime: weatherData.location.localtime },
             weather: { temperature_celsius: weatherData.current.temp_c, condition: weatherData.current.condition.text, humidity_percent: weatherData.current.humidity, wind_kph: weatherData.current.wind_kph, uv_index: weatherData.current.uv, rainfall_mm: weatherData.current.precip_mm },
@@ -70,7 +88,9 @@ app.get('/api/health-metrics', async (req, res) => {
                 pm10: weatherData.current.air_quality.pm10,
                 o3: weatherData.current.air_quality.o3,
                 no2: weatherData.current.air_quality.no2
-            }
+            },
+            // 4. Add the new forecast data to your response
+            forecast: forecastData
         };
 
         const cache = await GuestAnalysisCache.findOne({ location: location });

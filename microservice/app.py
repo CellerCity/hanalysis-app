@@ -73,6 +73,7 @@ def create_chat_message_list(data, retrieved_context):
     user_profile = data.get('userProfile', {})
     weather = data.get('weather', {})
     air_quality = weather.get('air_quality', {})
+    weather_forecast = weather.get('forecast', {})
     chat_history = data.get('history', [])
 
     # --- MODIFICATION 1: Simplify context ---
@@ -120,6 +121,7 @@ def create_chat_message_list(data, retrieved_context):
     - Location: {weather.get('location', {}).get('name', 'N/A')}
     - Temperature: {weather.get('weather', {}).get('temperature_celsius', 'N/A')}°C
     - AQI: {air_quality.get('us_epa_index', 'N/A')}
+    - Forecast: {weather_forecast}
 
     **Internal Knowledge (Source: {context_source}):**
     {context_text}

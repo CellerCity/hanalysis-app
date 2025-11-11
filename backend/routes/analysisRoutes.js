@@ -13,10 +13,24 @@ router.get('/full', protect, async (req, res) => {
         let location = user.currentLocation || user.location;
         let structuredWeatherData = null;
         let geoCode = null;
+        const weatherApiKey = process.env.WEATHER_API_KEY;
 
-        await axios.get(`https://api.weatherapi.com/v1/current.json?key=${process.env.WEATHER_API_KEY}&q=${location}&aqi=yes`)
+        await axios.get(`https://api.weatherapi.com/v1/forecast.json?key=${weatherApiKey}&q=${location}&days=3&aqi=yes`)
             .then(weatherResponse => {
                 const weatherData = weatherResponse.data;
+
+                const forecastData = weatherData.forecast.forecastday.map(day => ({
+                    date: day.date,
+                    maxtemp_c: day.day.maxtemp_c,
+                    mintemp_c: day.day.mintemp_c,
+                    condition: day.day.condition.text,
+                    icon: day.day.condition.icon,
+
+                    daily_chance_of_rain: day.day.daily_chance_of_rain,
+                    uv: day.day.uv,
+                    maxwind_kph: day.day.maxwind_kph
+                }));
+                
                 structuredWeatherData = {
                     location: weatherData.location,
                     weather: { temperature_celsius: weatherData.current.temp_c, humidity_percent: weatherData.current.humidity, condition: weatherData.current.condition.text, wind_kph: weatherData.current.wind_kph, uv_index: weatherData.current.uv, rainfall_mm: weatherData.current.precip_mm },
@@ -26,7 +40,9 @@ router.get('/full', protect, async (req, res) => {
                         pm10: weatherData.current.air_quality.pm10,
                         o3: weatherData.current.air_quality.o3,
                         no2: weatherData.current.air_quality.no2
-                    }
+                    },
+
+                    forecast: forecastData
                 };
                 geoCode = weatherData.location.country === 'India' 
                     ? `IN-${weatherData.location.region.replace(/\s+/g, '').substring(0, 2).toUpperCase()}` 
@@ -35,7 +51,7 @@ router.get('/full', protect, async (req, res) => {
             })
             .catch(weatherError => {
                 console.error(`!!! Weather API failed for location "${location}".`);
-                structuredWeatherData = { location: { name: location, region: '' }, weather: {}, air_quality: {} };
+                structuredWeatherData = { location: { name: location, region: '' }, weather: {}, air_quality: {}, forecast: {}};
                 geoCode = 'IN';
             });
         

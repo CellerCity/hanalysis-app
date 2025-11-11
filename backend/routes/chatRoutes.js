@@ -21,9 +21,23 @@ router.post('/', protect, async (req, res) => {
 
         // 1. --- Fetch Real-time Weather and AQI Data ---
         const weatherApiKey = process.env.WEATHER_API_KEY;
-        const weatherUrl = `https://api.weatherapi.com/v1/current.json?key=${weatherApiKey}&q=${location}&aqi=yes`;
-        const weatherResponse = await axios.get(weatherUrl);
-        const weatherData = weatherResponse.data;
+        const forecastUrl = `https://api.weatherapi.com/v1/forecast.json?key=${weatherApiKey}&q=${location}&days=3&aqi=yes`;
+
+        // Naming this 'apiResponse' for clarity
+        const apiResponse = await axios.get(forecastUrl); 
+        const weatherData = apiResponse.data;
+
+        const forecastData = weatherData.forecast.forecastday.map(day => ({
+            date: day.date,
+            maxtemp_c: day.day.maxtemp_c,
+            mintemp_c: day.day.mintemp_c,
+            condition: day.day.condition.text,
+            icon: day.day.condition.icon,
+
+            daily_chance_of_rain: day.day.daily_chance_of_rain,
+            uv: day.day.uv,
+            maxwind_kph: day.day.maxwind_kph
+        }));
 
         const structuredWeatherData = {
             location: weatherData.location,
@@ -37,7 +51,8 @@ router.post('/', protect, async (req, res) => {
                 pm10: weatherData.current.air_quality.pm10,
                 o3: weatherData.current.air_quality.o3,
                 no2: weatherData.current.air_quality.no2
-            }
+            },
+            forecast: forecastData
         };
 
         // --- THE FIX: Defensively build the userProfile object ---
@@ -55,7 +70,7 @@ router.post('/', protect, async (req, res) => {
         const payload = {
             userProfile: safeUserProfile, // Use the safe object
             weather: structuredWeatherData,
-            history: history
+            history: history,
         };
 
         // 3. --- Call the Flask Microservice's Chat Endpoint ---
