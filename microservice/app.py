@@ -69,48 +69,81 @@ def create_analysis_prompt(data):
     Now, generate the final, adjusted JSON analysis for this specific user.
     """
 
-# --- (create_chat_message_list function remains the same) ---
 def create_chat_message_list(data, retrieved_context):
-# ... (function is unchanged) ...
     user_profile = data.get('userProfile', {})
     weather = data.get('weather', {})
     air_quality = weather.get('air_quality', {})
     chat_history = data.get('history', [])
-    context_prompt = "No additional context found."
+
+    # --- MODIFICATION 1: Simplify context ---
+    # We strip all "fact sheet" language. This is just the raw
+    # information and its source for the AI's internal use.
+    context_text = "No additional context."
+    context_source = "Internal Knowledge" # Default source
     if retrieved_context:
-        context_prompt = f"""
-        Here is a trusted fact sheet from our library to help you answer the user's question. 
-        Base your answer primarily on this information.
-        
-        **Fact Sheet (Source: {retrieved_context.get('source_url', 'WHO')})**
-        {retrieved_context.get('chunk_text', 'No text found.')}
-        """
+        context_text = retrieved_context.get('chunk_text', 'No text found.')
+        # Get the source (e.g., "WHO") for citation, per your request
+        context_source = retrieved_context.get('source_url', 'trusted sources') 
+
+    # --- MODIFICATION 2: Rebuild the system_instruction ---
+    # This is now a much stricter "prompt-first" instruction.
     system_instruction = f"""
-    You are HANALYSIS, a helpful and cautious personal health assistant. 
-    Answer the user's questions based on their profile, the real-time data provided, and the trusted fact sheet.
-    
-    **Current User Profile:**
+    You are HANALYSIS, a helpful and cautious personal health assistant.
+
+    **--- YOUR TASK ---**
+    Answer the user's last question.
+    Your answer must be based *only* on the information provided below (User Profile, Environment, Internal Knowledge).
+
+    **--- 1. OUTPUT RULES (MANDATORY) ---**
+    * Your entire response MUST be plain text.
+    * DO NOT use any markdown (no `*`, `**`, `#`, or lists).
+    * DO NOT use LaTeX or special formatting.
+    * Write in simple, clear sentences.
+
+    **--- 2. SAFETY RULES (MANDATORY) ---**
+    * You are an AI assistant, NOT a medical professional.
+    * DO NOT provide a medical diagnosis.
+    * DO NOT prescribe specific medications or dosages.
+    * You MAY discuss general information or light, over-the-counter suggestions ONLY if they are explicitly mentioned in the "Internal Knowledge" section.
+    * If you use information from the "Internal Knowledge", you can cite its source (e.g., "According to {context_source},...").
+    * You MUST NOT mention the words "fact sheet" or "internal knowledge".
+    * Your response MUST end with this exact disclaimer: "Please remember, this is for informational purposes only. Consult a healthcare professional for medical advice."
+
+    **--- 3. DATA FOR YOUR RESPONSE ---**
+
+    **User Profile:**
     - Age: {user_profile.get('age', 'N/A')}
     - Conditions: {', '.join(user_profile.get('healthProfile', {}).get('preExistingConditions', [])) or 'None'}
     - Allergies: {', '.join(user_profile.get('healthProfile', {}).get('allergies', [])) or 'None'}
 
-    **Current Environmental Data:**
+    **Environmental Data:**
     - Location: {weather.get('location', {}).get('name', 'N/A')}
     - Temperature: {weather.get('weather', {}).get('temperature_celsius', 'N/A')}°C
     - AQI: {air_quality.get('us_epa_index', 'N/A')}
 
-    **Trusted Fact Sheet:**
-    {context_prompt}
-    
-    Now, please answer the user's last question.
+    **Internal Knowledge (Source: {context_source}):**
+    {context_text}
+
+    **--- 4. CONVERSATION ---**
+    [The user's previous messages will be provided after this instruction.]
+
+    Now, answer the user's last question, following all rules.
     """
+
+    # --- MODIFICATION 3: Message list structure ---
+    # The system instruction is the first "user" message, as before.
     messages = [{"role": "user", "parts": [{"text": system_instruction}]}]
-    messages.append({"role": "model", "parts": [{"text": "Understood. I will answer the user's question using their profile, live data, and the provided fact sheet."}]})
+    
+    # The "Understood" response helps lock in the instructions.
+    messages.append({"role": "model", "parts": [{"text": "Understood. I will answer the user's last question following all output and safety rules. I will provide a plain text answer and include the required medical disclaimer."}]})
+    
+    # Append the actual chat history
     for message in chat_history:
         messages.append({
             "role": "user" if message["role"] == "user" else "model",
             "parts": [{"text": message["content"]}]
         })
+    
     return messages
 
 # --- (All other API routes remain the same) ---
