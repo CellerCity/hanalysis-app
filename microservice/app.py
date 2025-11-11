@@ -120,6 +120,9 @@ def index():
 @app.route('/api/trends')
 def get_trends():
     return jsonify([]) # Keep trends disabled
+
+
+
 @app.route('/api/analyze', methods=['POST'])
 def analyze_health_data():
     if not model: return jsonify({"error": "AI model is not configured."}), 503

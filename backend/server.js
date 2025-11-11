@@ -80,6 +80,11 @@ app.get('/api/health-metrics', async (req, res) => {
         const geoCode = weatherData.location.country === 'India' 
             ? `IN-${weatherData.location.region.replace(/\s+/g, '').substring(0, 2).toUpperCase()}` 
             : weatherData.location.country_iso2;
+
+        // --- THE FIX: Always use the reliable country code 'IN' ---
+        // const geoCode = 'IN';
+        // We no longer use the complex logic that generated 'IN-WE'
+        
         const trendsCache = await TrendsCache.findOne({ geo: geoCode });
         const trendsData = trendsCache ? trendsCache.data : [];
 

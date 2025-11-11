@@ -25,6 +25,7 @@ router.get('/full', protect, async (req, res) => {
                 geoCode = weatherData.location.country === 'India' 
                     ? `IN-${weatherData.location.region.replace(/\s+/g, '').substring(0, 2).toUpperCase()}` 
                     : weatherData.location.country_iso2;
+                // geoCode = 'IN'; 
             })
             .catch(weatherError => {
                 console.error(`!!! Weather API failed for location "${location}".`);
@@ -58,6 +59,7 @@ router.get('/full', protect, async (req, res) => {
                 } catch (trendError) {
                     console.error("[TRENDS DEBUG] ERROR: Live fetch failed. Using stale cache if available.", trendError.message);
                     trendsData = trendsCache ? trendsCache.data : [];
+                    console.log("Stale Trends data: ", trendsCache.data);
                 }
             }
         }
