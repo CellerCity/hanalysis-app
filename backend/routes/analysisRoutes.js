@@ -20,7 +20,13 @@ router.get('/full', protect, async (req, res) => {
                 structuredWeatherData = {
                     location: weatherData.location,
                     weather: { temperature_celsius: weatherData.current.temp_c, humidity_percent: weatherData.current.humidity, condition: weatherData.current.condition.text, wind_kph: weatherData.current.wind_kph, uv_index: weatherData.current.uv, rainfall_mm: weatherData.current.precip_mm },
-                    air_quality: weatherData.current.air_quality,
+                    air_quality: {
+                        us_epa_index: weatherData.current.air_quality['us-epa-index'], // <-- The fix
+                        pm2_5: weatherData.current.air_quality.pm2_5,
+                        pm10: weatherData.current.air_quality.pm10,
+                        o3: weatherData.current.air_quality.o3,
+                        no2: weatherData.current.air_quality.no2
+                    }
                 };
                 geoCode = weatherData.location.country === 'India' 
                     ? `IN-${weatherData.location.region.replace(/\s+/g, '').substring(0, 2).toUpperCase()}` 
