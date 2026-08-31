@@ -221,10 +221,10 @@ def handle_chat():
             pipeline = [
                 {
                     "$vectorSearch": {
-                        "index": "search_buddy",     # <-- UPDATE THIS: Your vector index name
-                        "path": "chunk_embedding",        # <-- UPDATE THIS: Your embedding field name
+                        "index": "search_buddy",
+                        "path": "chunk_embedding",
                         "queryVector": query_vector,
-                        "numCandidates": 100,             # Number to check
+                        "numCandidates": 100,
                         "limit": 1                        # Get the single best match
                     }
                 },
