@@ -15,7 +15,6 @@ const Login = ({ onNavigate }) => {
         e.preventDefault();
         setError('');
         try {
-            // --- THE FIX: Use the 'api' client directly ---
             const { data } = await api.post('/users/login', { email, password });
             handleAuthentication(data.token);
             // Navigation will be handled by App.jsx's re-render

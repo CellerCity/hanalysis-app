@@ -20,13 +20,13 @@ const updateUserLocation = async (req, user) => {
     const ip = req.ip || req.connection.remoteAddress;
     let determinedLocation = user.currentLocation || user.location; 
     
-    // --- THE FIX: Create a 100% reliable path for localhost development ---
+    // Localhost has no public IP to geolocate, so fall back to a configured default.
     if (ip === '::1' || ip === '127.0.0.1') {
         console.log(`[LOCATION] Localhost environment detected. Using fallback location.`);
         determinedLocation = process.env.DEV_DEFAULT_LOCATION || user.location || 'Kharagpur';
     }
     else{       
-        // --- THE FIX: Use the new, more reliable ipgeolocation.io API ---
+        // Resolve the client's city from their IP.
         const apiKey = process.env.IPGEOLOCATION_API_KEY;
         if (apiKey) {
             try {

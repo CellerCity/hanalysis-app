@@ -19,8 +19,7 @@ connectDB();
 const app = express();
 const MICROSERVICE_URL = process.env.MICROSERVICE_URL || 'http://127.0.0.1:8000';
 
-// --- THE FIX: Configure CORS for Production ---
-// We create a list of allowed origins.
+// Accept requests only from the local dev server and the deployed frontend.
 const allowedOrigins = [
   'http://localhost:5173', // For local development
   process.env.CORS_ORIGIN   // The production frontend URL from our environment variables
@@ -40,7 +39,7 @@ const corsOptions = {
 app.use(cors(corsOptions)); // Use the configured options
 app.use(express.json());
 
-// API Routes (remain the same)
+// API routes
 app.use('/api/users', userRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/analysis', analysisRoutes);
@@ -52,7 +51,7 @@ app.get('/', (req, res) => {
 });
 
 
-// UPGRADED /api/health-metrics FOR GUEST MODE
+// Guest mode: no auth, location arrives as a query parameter.
 app.get('/api/health-metrics', async (req, res) => {
     const location = req.query.location || 'Kharagpur';
 
@@ -107,10 +106,6 @@ app.get('/api/health-metrics', async (req, res) => {
             ? `IN-${weatherData.location.region.replace(/\s+/g, '').substring(0, 2).toUpperCase()}` 
             : weatherData.location.country_iso2;
 
-        // --- THE FIX: Always use the reliable country code 'IN' ---
-        // const geoCode = 'IN';
-        // We no longer use the complex logic that generated 'IN-WE'
-        
         const trendsCache = await TrendsCache.findOne({ geo: geoCode });
         const trendsData = trendsCache ? trendsCache.data : [];
 

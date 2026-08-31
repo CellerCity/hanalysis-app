@@ -1,8 +1,6 @@
 import axios from 'axios';
 
-// --- THE FIX: Use an environment variable for the base URL ---
-// When we run `npm run dev`, Vite leaves this blank, so it falls back to localhost.
-// When we deploy, Vite will use the VITE_API_URL we set on Render.
+// Base URL comes from VITE_API_URL when deployed, otherwise the local server.
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const api = axios.create({

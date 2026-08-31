@@ -9,7 +9,6 @@ import json
 from pymongo import MongoClient, TEXT # Import pymongo
 from sentence_transformers import SentenceTransformer
 
-# ... (MongoDB and Gemini Configuration remain the same) ...
 load_dotenv()
 try:
     MONGODB_URI = os.getenv("MONGODB_URI")
@@ -175,7 +174,6 @@ def create_chat_message_list(data, retrieved_context):
     
     return messages
 
-# --- (All other API routes remain the same) ---
 @app.route('/')
 def index():
     return jsonify({"message": "Welcome to the HANALYSIS Flask Microservice!"})
@@ -210,10 +208,10 @@ def handle_chat():
         
         user_question = data['history'][-1]['content']
         
-        # --- THIS IS THE NEW RAG LOGIC ---
-        
         retrieved_context = None
-        MINIMUM_SCORE_THRESHOLD = 0.75 # <-- TUNE THIS SCORE (0.0 to 1.0)
+        # Cosine floor for a retrieved WHO fact to be quoted. Below 0.75 the top hit was
+        # usually topically related but not an answer, which produced confident wrong advice.
+        MINIMUM_SCORE_THRESHOLD = 0.75
         
         try:
             # 1. Create a vector for the user's question
@@ -254,8 +252,6 @@ def handle_chat():
                     
         except Exception as db_e:
             print(f"Error during context retrieval: {db_e}")
-        
-        # --- END OF NEW RAG LOGIC ---
         
 
         messages = create_chat_message_list(data, retrieved_context)

@@ -28,7 +28,6 @@ const Signup = ({ onNavigate }) => {
         if (password.length < 6) { return setError('Password must be at least 6 characters'); }
         try {
             const newUser = { name, email, password, age, location, preExistingConditions, allergies };
-            // --- THE FIX: Use the 'api' client instead of global axios ---
             const { data } = await api.post('/users/register', newUser);
             
             handleAuthentication(data.token);

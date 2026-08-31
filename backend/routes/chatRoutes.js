@@ -55,8 +55,7 @@ router.post('/', protect, async (req, res) => {
             forecast: forecastData
         };
 
-        // --- THE FIX: Defensively build the userProfile object ---
-        // This ensures that even for a new user, healthProfile and its arrays always exist.
+        // A newly registered user may have no healthProfile yet, so build it defensively.
         const safeUserProfile = {
             age: user.age,
             location: user.location, // Home location

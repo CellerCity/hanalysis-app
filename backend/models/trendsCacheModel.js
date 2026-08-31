@@ -20,9 +20,7 @@ const trendsCacheSchema = new mongoose.Schema({
     },
 });
 
-// --- THE FIX ---
-// We remove the line below because `unique: true` already handles indexing.
-// trendsCacheSchema.index({ geo: 1 });
+// `unique: true` on geo already creates the index, so no explicit index is declared.
 
 const TrendsCache = mongoose.model('TrendsCache', trendsCacheSchema);
 
